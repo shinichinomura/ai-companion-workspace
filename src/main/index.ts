@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { registerWorkspaceHandlers } from './workspace'
 
 // メインウィンドウを生成する。
 // セキュリティ方針（spec 2.3.3）に従い、renderer に Node.js API を直接公開しない。
@@ -45,6 +46,9 @@ app.whenReady().then(() => {
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
+
+  // workspace 関連の IPC ハンドラを登録する。
+  registerWorkspaceHandlers()
 
   createWindow()
 

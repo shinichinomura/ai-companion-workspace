@@ -71,6 +71,92 @@ body {
   font-size: 12px;
 }
 
+/* Explorer ヘッダー（タイトル + フォルダを開くボタン） */
+.explorer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.explorer-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--fg);
+  background: #333;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #3a3a3a;
+}
+
+/* ファイルツリー */
+.tree {
+  padding: 4px 0;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding-right: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tree-row:hover {
+  background: var(--bg-elev);
+}
+
+.tree-row.active {
+  background: #094771;
+}
+
+.tree-twisty {
+  width: 12px;
+  flex: 0 0 auto;
+  color: var(--fg-dim);
+  font-size: 10px;
+}
+
+.tree-icon {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.tree-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* エディタ（Step 2 の暫定表示） */
+.editor-body {
+  padding: 0;
+}
+
+.editor-pre {
+  margin: 0;
+  padding: 12px;
+  font-family: 'SF Mono', Menlo, Monaco, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* react-resizable-panels のドラッグハンドル */
 .resize-handle {
   width: 1px;
