@@ -1,7 +1,7 @@
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { registerWorkspaceHandlers } from './workspace'
+import { registerWorkspaceHandlers, disposeWorkspace } from './workspace'
 
 // メインウィンドウを生成する。
 // セキュリティ方針（spec 2.3.3）に従い、renderer に Node.js API を直接公開しない。
@@ -62,4 +62,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// 終了前に file watcher を後始末する。
+app.on('will-quit', () => {
+  void disposeWorkspace()
 })

@@ -5,7 +5,9 @@ export const IpcChannel = {
   OpenFolder: 'workspace:open-folder',
   ReadDir: 'workspace:read-dir',
   ReadFile: 'workspace:read-file',
-  WriteFile: 'workspace:write-file'
+  WriteFile: 'workspace:write-file',
+  // main → renderer への push。file watcher が検知した変更を通知する。
+  FsEvent: 'workspace:fs-event'
 } as const
 
 // ファイルツリーの 1 ノード。ディレクトリは遅延展開するため children は持たない。
@@ -49,10 +51,25 @@ export interface WriteFileResult {
   relPath: string
 }
 
+// file watcher が検知した 1 件の変更。relPath は project root からの相対パス（'/' 区切り）。
+export type FsChangeKind = 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir'
+
+export interface FsChange {
+  kind: FsChangeKind
+  relPath: string
+}
+
+// debounce してまとめて push される変更バッチ。
+export interface FsEventBatch {
+  changes: FsChange[]
+}
+
 // renderer に公開する API の型。preload で実装し window.api として参照する。
 export interface WorkspaceApi {
   openFolder: () => Promise<OpenFolderResult | null>
   readDir: (req: ReadDirRequest) => Promise<FileNode[]>
   readFile: (req: ReadFileRequest) => Promise<ReadFileResult>
   writeFile: (req: WriteFileRequest) => Promise<WriteFileResult>
+  // file watcher の変更通知を購読する。返り値は購読解除関数。
+  onFsEvent: (cb: (batch: FsEventBatch) => void) => () => void
 }
