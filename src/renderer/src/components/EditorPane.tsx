@@ -1,5 +1,13 @@
+import { useEffect, useState } from 'react'
 import { useWorkspaceStore, isDirty } from '../store/workspace'
 import MonacoEditor from './MonacoEditor'
+import MarkdownPreview from './MarkdownPreview'
+
+// Markdown として扱う拡張子か判定する。
+function isMarkdown(relPath: string): boolean {
+  const lower = relPath.toLowerCase()
+  return lower.endsWith('.md') || lower.endsWith('.markdown')
+}
 
 // 中央ペイン: エディタ / ビューワー。Monaco Editor でテキスト編集と保存を行う。
 function EditorPane(): JSX.Element {
@@ -10,6 +18,15 @@ function EditorPane(): JSX.Element {
   const dismissExternalChange = useWorkspaceStore((s) => s.dismissExternalChange)
 
   const dirty = isDirty(activeFile)
+  const markdown = activeFile != null && !activeFile.isBinary && isMarkdown(activeFile.relPath)
+
+  // Edit / Preview の表示状態。ストアに持たせずペイン内で管理する。
+  const [view, setView] = useState<'edit' | 'preview'>('edit')
+
+  // ファイルを切り替えたら Edit に戻す。
+  useEffect(() => {
+    setView('edit')
+  }, [activeFile?.relPath])
 
   return (
     <div className="pane-inner">
@@ -18,6 +35,22 @@ function EditorPane(): JSX.Element {
           <>
             {activeFile.name}
             {dirty && <span className="dirty-indicator" title="未保存の変更があります"> ●</span>}
+            {markdown && (
+              <span className="view-toggle">
+                <button
+                  className={`view-toggle-btn${view === 'edit' ? ' active' : ''}`}
+                  onClick={() => setView('edit')}
+                >
+                  Edit
+                </button>
+                <button
+                  className={`view-toggle-btn${view === 'preview' ? ' active' : ''}`}
+                  onClick={() => setView('preview')}
+                >
+                  Preview
+                </button>
+              </span>
+            )}
           </>
         ) : (
           'Editor'
@@ -46,11 +79,14 @@ function EditorPane(): JSX.Element {
           </button>
         </div>
       )}
-      <div className="pane-body editor-body">
+      <div className={`pane-body${markdown && view === 'preview' ? '' : ' editor-body'}`}>
         {!activeFile ? (
           <div className="placeholder">ファイルが選択されていません</div>
         ) : activeFile.isBinary ? (
           <div className="placeholder">バイナリまたは巨大なファイルのため表示できません</div>
+        ) : markdown && view === 'preview' ? (
+          // 編集中の最新内容（content）をプレビューする。
+          <MarkdownPreview content={activeFile.content} />
         ) : (
           <MonacoEditor
             path={activeFile.relPath}

@@ -198,3 +198,152 @@ body {
   position: absolute;
   inset: 0 -3px;
 }
+
+/* Markdown の Edit / Preview 切替トグル */
+.view-toggle {
+  margin-left: 10px;
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: middle;
+}
+
+.view-toggle-btn {
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fg-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 7px;
+  cursor: pointer;
+}
+
+.view-toggle-btn:hover {
+  color: var(--fg);
+}
+
+.view-toggle-btn.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Markdown プレビュー本体 */
+.markdown-preview {
+  max-width: 860px;
+  line-height: 1.6;
+  -webkit-user-select: text;
+  user-select: text;
+  word-wrap: break-word;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4 {
+  line-height: 1.25;
+  margin: 1.2em 0 0.6em;
+  font-weight: 600;
+}
+
+.markdown-preview h1 {
+  font-size: 1.8em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown-preview h2 {
+  font-size: 1.4em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown-preview h3 {
+  font-size: 1.2em;
+}
+
+.markdown-preview p,
+.markdown-preview ul,
+.markdown-preview ol,
+.markdown-preview blockquote,
+.markdown-preview table {
+  margin: 0 0 1em;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  padding-left: 1.6em;
+}
+
+.markdown-preview li {
+  margin: 0.2em 0;
+}
+
+.markdown-preview a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.markdown-preview a:hover {
+  text-decoration: underline;
+}
+
+.markdown-preview code {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+}
+
+.markdown-preview pre {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  overflow: auto;
+  margin: 0 0 1em;
+}
+
+.markdown-preview pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.markdown-preview blockquote {
+  margin-left: 0;
+  padding: 0 1em;
+  color: var(--fg-dim);
+  border-left: 3px solid var(--border);
+}
+
+.markdown-preview table {
+  border-collapse: collapse;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+}
+
+.markdown-preview th {
+  background: var(--bg-elev);
+}
+
+.markdown-preview img {
+  max-width: 100%;
+}
+
+.markdown-preview hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+.markdown-preview input[type='checkbox'] {
+  margin-right: 0.4em;
+}
