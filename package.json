@@ -1,0 +1,37 @@
+{
+  "name": "claude-code-companion-workspace",
+  "version": "0.0.1",
+  "description": "Claude Code を使ったローカルプロジェクト作業を支援する Mac 向けワークスペース",
+  "main": "./out/main/index.js",
+  "author": "Shinichi Nomura",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "env -u ELECTRON_RUN_AS_NODE electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "preview": "env -u ELECTRON_RUN_AS_NODE electron-vite preview",
+    "start": "env -u ELECTRON_RUN_AS_NODE electron-vite preview",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "package:mac": "npm run build && electron-builder --mac --arm64"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-resizable-panels": "^2.1.7",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
+  }
+}

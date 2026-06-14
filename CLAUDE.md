@@ -45,4 +45,21 @@ Claude Code を使ったローカルプロジェクト作業を支援する **Ma
 
 ## コマンド
 
-<!-- プロジェクトセットアップ後に追記する（dev / build / lint / test 等） -->
+- `npm run dev` — electron-vite 開発サーバー（HMR）でアプリを起動
+- `npm run build` — typecheck + main/preload/renderer をビルド（`out/` に出力）
+- `npm run typecheck` — main(node) と renderer(web) の型チェック
+- `npm run package:mac` — macOS arm64 向けにパッケージング（electron-builder）
+
+## 既知の環境上の注意
+
+- VSCode / Claude Code の統合ターミナルでは `ELECTRON_RUN_AS_NODE=1` が設定されていることがある。これが残っていると Electron が素の Node として起動し `app` が undefined になって落ちる。npm スクリプトは `env -u ELECTRON_RUN_AS_NODE` でこれを打ち消している。
+
+## ディレクトリ構成
+
+```
+src/
+  main/      Electron メインプロセス（fs / pty / watcher / IPC ハンドラ）
+  preload/   contextBridge で renderer に API を公開
+  renderer/  React アプリ（3 ペイン UI）
+    src/components/  FileExplorer / EditorPane / TerminalPane
+```

@@ -1,0 +1,92 @@
+/* ベーススタイル。ダークテーマを基調とする。 */
+:root {
+  --bg: #1e1e1e;
+  --bg-elev: #252526;
+  --border: #333;
+  --fg: #d4d4d4;
+  --fg-dim: #888;
+  --accent: #0a84ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.app {
+  height: 100vh;
+}
+
+.pane {
+  height: 100%;
+  background: var(--bg);
+}
+
+.pane-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.pane-header {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-dim);
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  /* タイトルバー hiddenInset と干渉しないよう、最初のペインに余白を持たせたい場合は別途調整 */
+}
+
+.pane-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 12px;
+}
+
+.placeholder {
+  color: var(--fg-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 12px;
+}
+
+/* react-resizable-panels のドラッグハンドル */
+.resize-handle {
+  width: 1px;
+  background: var(--border);
+  position: relative;
+  transition: background 0.15s;
+}
+
+.resize-handle:hover,
+.resize-handle[data-resize-handle-active] {
+  background: var(--accent);
+}
+
+/* ハンドルの当たり判定を広げる（見た目は 1px のまま） */
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+}
