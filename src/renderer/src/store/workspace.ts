@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { FileNode, FsEventBatch } from '../../../shared/ipc'
+import type { FileNode, FsEventBatch, OpenFolderResult } from '../../../shared/ipc'
 
 // 開いているファイルの状態。
 export interface OpenFile {
@@ -27,6 +27,23 @@ export function isDirty(file: OpenFile | null): boolean {
   return file != null && !file.isBinary && file.content !== file.savedContent
 }
 
+// openFolder / openFolderByPath の結果をストアに反映する共通処理。
+// 結果が null（キャンセル・開けないフォルダ）の場合は何もしない。
+async function applyOpenResult(
+  result: OpenFolderResult | null,
+  set: (partial: Partial<WorkspaceState>) => void
+): Promise<void> {
+  if (!result) return
+  const rootChildren = await window.api.readDir({ relPath: '' })
+  set({
+    root: result.root,
+    rootName: result.name,
+    childrenByDir: { '': rootChildren },
+    expandedDirs: new Set(),
+    activeFile: null
+  })
+}
+
 interface WorkspaceState {
   // project root（絶対パス）と表示名。未選択は null。
   root: string | null
@@ -40,8 +57,17 @@ interface WorkspaceState {
   // 中央ペインで開いているファイル。未選択は null。
   activeFile: OpenFile | null
 
+  // 最近開いたフォルダの絶対パス一覧（新しい順）。
+  recentFolders: string[]
+
   // 操作。
   openFolder: () => Promise<void>
+  // 最近開いた一覧を main から取得して反映する。
+  loadRecentFolders: () => Promise<void>
+  // 前回フォルダ（最新の最近開いた一覧）を自動で開き直す。起動時に呼ぶ。
+  restoreLastFolder: () => Promise<void>
+  // 指定パスのフォルダを開く（最近開いた一覧からの選択）。
+  openFolderByPath: (path: string) => Promise<void>
   toggleDir: (relPath: string) => Promise<void>
   openFile: (node: FileNode) => Promise<void>
   // エディタの編集内容を反映する。
@@ -62,19 +88,38 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   childrenByDir: {},
   expandedDirs: new Set(),
   activeFile: null,
+  recentFolders: [],
 
   // フォルダを開き、ルート直下を読み込む。
   openFolder: async () => {
     const result = await window.api.openFolder()
-    if (!result) return
-    const rootChildren = await window.api.readDir({ relPath: '' })
-    set({
-      root: result.root,
-      rootName: result.name,
-      childrenByDir: { '': rootChildren },
-      expandedDirs: new Set(),
-      activeFile: null
-    })
+    await applyOpenResult(result, set)
+    await get().loadRecentFolders()
+  },
+
+  // 最近開いた一覧を main から取得して反映する。
+  loadRecentFolders: async () => {
+    const recent = await window.api.getRecentFolders()
+    set({ recentFolders: recent })
+  },
+
+  // 前回フォルダを自動で開き直す。存在しなければ何もしない（一覧は main 側で掃除される）。
+  restoreLastFolder: async () => {
+    const recent = await window.api.getRecentFolders()
+    set({ recentFolders: recent })
+    const last = recent[0]
+    if (!last) return
+    const result = await window.api.openFolderByPath({ path: last })
+    await applyOpenResult(result, set)
+    // 開けずに一覧から除外された場合に備えて再取得する。
+    await get().loadRecentFolders()
+  },
+
+  // 指定パスのフォルダを開く（最近開いた一覧からの選択）。
+  openFolderByPath: async (path: string) => {
+    const result = await window.api.openFolderByPath({ path })
+    await applyOpenResult(result, set)
+    await get().loadRecentFolders()
   },
 
   // ディレクトリの展開 / 折りたたみ。未読込なら子を取得する。

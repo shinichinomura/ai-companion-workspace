@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import {
   IpcChannel,
   type FsEventBatch,
+  type OpenFolderByPathRequest,
   type ReadDirRequest,
   type ReadFileRequest,
   type TerminalExit,
@@ -15,6 +16,9 @@ import {
 // renderer に公開する API。すべて main process への IPC として実装する（spec 2.3.3）。
 const api: WorkspaceApi = {
   openFolder: () => ipcRenderer.invoke(IpcChannel.OpenFolder),
+  openFolderByPath: (req: OpenFolderByPathRequest) =>
+    ipcRenderer.invoke(IpcChannel.OpenFolderByPath, req),
+  getRecentFolders: () => ipcRenderer.invoke(IpcChannel.GetRecentFolders),
   readDir: (req: ReadDirRequest) => ipcRenderer.invoke(IpcChannel.ReadDir, req),
   readFile: (req: ReadFileRequest) => ipcRenderer.invoke(IpcChannel.ReadFile, req),
   writeFile: (req: WriteFileRequest) => ipcRenderer.invoke(IpcChannel.WriteFile, req),

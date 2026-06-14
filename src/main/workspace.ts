@@ -8,6 +8,7 @@ import {
   type FsChange,
   type FsChangeKind,
   type FsEventBatch,
+  type OpenFolderByPathRequest,
   type OpenFolderResult,
   type ReadDirRequest,
   type ReadFileRequest,
@@ -15,6 +16,7 @@ import {
   type WriteFileRequest,
   type WriteFileResult
 } from '../shared/ipc'
+import { addRecentFolder, loadRecentFolders, removeRecentFolder } from './settings'
 
 // 初期 ignore 対象のディレクトリ名（spec 4.2 / 5.6）。
 const IGNORED_DIRS = new Set([
@@ -119,7 +121,31 @@ function resolveWithinRoot(relPath: string): string {
   return abs
 }
 
-// Open Folder ダイアログを表示し、選択された root を記憶する。
+// 指定した root を project root として開く。
+// watcher を張り替え、最近開いた一覧を更新する。存在しない／ディレクトリでなければ null。
+async function openRoot(
+  root: string,
+  target: WebContents
+): Promise<OpenFolderResult | null> {
+  try {
+    const stat = await fs.stat(root)
+    if (!stat.isDirectory()) {
+      await removeRecentFolder(root)
+      return null
+    }
+  } catch {
+    // 削除・リネーム済みなど開けないフォルダは一覧から除外する。
+    await removeRecentFolder(root)
+    return null
+  }
+  projectRoot = root
+  // 新しい root の監視を開始する（前の root の watcher は張り替えで閉じる）。
+  await startWatching(root, target)
+  await addRecentFolder(root)
+  return { root, name: basename(root) }
+}
+
+// Open Folder ダイアログを表示し、選択された root を開く。
 async function handleOpenFolder(
   e: Electron.IpcMainInvokeEvent
 ): Promise<OpenFolderResult | null> {
@@ -131,11 +157,20 @@ async function handleOpenFolder(
   if (result.canceled || result.filePaths.length === 0) {
     return null
   }
-  const root = result.filePaths[0]
-  projectRoot = root
-  // 新しい root の監視を開始する（前の root の watcher は張り替えで閉じる）。
-  await startWatching(root, e.sender)
-  return { root, name: basename(root) }
+  return openRoot(result.filePaths[0], e.sender)
+}
+
+// 指定パス（最近開いた一覧・前回フォルダ）を直接開く。
+async function handleOpenFolderByPath(
+  e: Electron.IpcMainInvokeEvent,
+  req: OpenFolderByPathRequest
+): Promise<OpenFolderResult | null> {
+  return openRoot(req.path, e.sender)
+}
+
+// 最近開いたフォルダの絶対パス一覧を返す（新しい順）。
+async function handleGetRecentFolders(): Promise<string[]> {
+  return loadRecentFolders()
 }
 
 // 指定ディレクトリの直下のエントリを返す（遅延展開のため 1 階層のみ）。
@@ -201,6 +236,8 @@ async function handleWriteFile(_e: unknown, req: WriteFileRequest): Promise<Writ
 // workspace 関連の IPC ハンドラを登録する。app 起動後に 1 度だけ呼ぶ。
 export function registerWorkspaceHandlers(): void {
   ipcMain.handle(IpcChannel.OpenFolder, handleOpenFolder)
+  ipcMain.handle(IpcChannel.OpenFolderByPath, handleOpenFolderByPath)
+  ipcMain.handle(IpcChannel.GetRecentFolders, handleGetRecentFolders)
   ipcMain.handle(IpcChannel.ReadDir, handleReadDir)
   ipcMain.handle(IpcChannel.ReadFile, handleReadFile)
   ipcMain.handle(IpcChannel.WriteFile, handleWriteFile)

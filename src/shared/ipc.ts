@@ -3,6 +3,10 @@
 // IPC チャンネル名。文字列のタイポを防ぐため定数化する。
 export const IpcChannel = {
   OpenFolder: 'workspace:open-folder',
+  // 指定パス（最近開いた一覧・前回フォルダ）を直接開く。
+  OpenFolderByPath: 'workspace:open-folder-by-path',
+  // 最近開いたフォルダの絶対パス一覧を取得する。
+  GetRecentFolders: 'workspace:get-recent-folders',
   ReadDir: 'workspace:read-dir',
   ReadFile: 'workspace:read-file',
   WriteFile: 'workspace:write-file',
@@ -30,6 +34,11 @@ export interface FileNode {
 export interface OpenFolderResult {
   root: string // 選択されたフォルダの絶対パス
   name: string // 表示用のフォルダ名
+}
+
+// 指定パスを開くリクエスト。最近開いた一覧・前回フォルダの復元に使う。
+export interface OpenFolderByPathRequest {
+  path: string // 開くフォルダの絶対パス
 }
 
 // readDir / readFile のリクエスト。relPath は project root からの相対パス。
@@ -98,6 +107,10 @@ export interface TerminalExit {
 // renderer に公開する API の型。preload で実装し window.api として参照する。
 export interface WorkspaceApi {
   openFolder: () => Promise<OpenFolderResult | null>
+  // 指定パスを開く。存在しない・ディレクトリでない場合は null。
+  openFolderByPath: (req: OpenFolderByPathRequest) => Promise<OpenFolderResult | null>
+  // 最近開いたフォルダの絶対パス一覧（新しい順）。
+  getRecentFolders: () => Promise<string[]>
   readDir: (req: ReadDirRequest) => Promise<FileNode[]>
   readFile: (req: ReadFileRequest) => Promise<ReadFileResult>
   writeFile: (req: WriteFileRequest) => Promise<WriteFileResult>

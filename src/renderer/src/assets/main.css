@@ -109,6 +109,49 @@ body {
   background: #3a3a3a;
 }
 
+/* 最近開いたフォルダ一覧（フォルダ未選択時の空状態） */
+.recent-list {
+  padding: 8px 4px;
+}
+
+.recent-title {
+  font-size: 11px;
+  color: var(--fg-dim);
+  padding: 4px 8px;
+}
+
+.recent-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.recent-item:hover {
+  background: var(--bg-elev);
+}
+
+.recent-name {
+  font-size: 12px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-path {
+  font-size: 10px;
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
 /* ファイルツリー */
 .tree {
   padding: 4px 0;

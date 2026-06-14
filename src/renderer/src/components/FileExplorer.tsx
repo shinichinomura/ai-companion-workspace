@@ -43,6 +43,38 @@ function TreeNode({ node, depth }: { node: FileNode; depth: number }): JSX.Eleme
   )
 }
 
+// 絶対パスから表示用のフォルダ名（末尾セグメント）を取り出す。
+function folderName(path: string): string {
+  const segs = path.split('/').filter(Boolean)
+  return segs[segs.length - 1] ?? path
+}
+
+// フォルダ未選択時に表示する、最近開いたフォルダの一覧。
+function RecentFolders(): JSX.Element {
+  const recentFolders = useWorkspaceStore((s) => s.recentFolders)
+  const openFolderByPath = useWorkspaceStore((s) => s.openFolderByPath)
+
+  if (recentFolders.length === 0) {
+    return <div className="placeholder">フォルダが開かれていません</div>
+  }
+  return (
+    <div className="recent-list">
+      <div className="recent-title">最近開いたフォルダ</div>
+      {recentFolders.map((path) => (
+        <div
+          key={path}
+          className="recent-item"
+          title={path}
+          onClick={() => void openFolderByPath(path)}
+        >
+          <span className="recent-name">{folderName(path)}</span>
+          <span className="recent-path">{path}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // 左ペイン: ファイルエクスプローラー。
 function FileExplorer(): JSX.Element {
   const rootName = useWorkspaceStore((s) => s.rootName)
@@ -63,7 +95,7 @@ function FileExplorer(): JSX.Element {
             <TreeNode key={node.relPath} node={node} depth={0} />
           ))
         ) : (
-          <div className="placeholder">フォルダが開かれていません</div>
+          <RecentFolders />
         )}
       </div>
     </div>

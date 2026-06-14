@@ -9,6 +9,7 @@ import { useWorkspaceStore } from './store/workspace'
 // ペイン幅はドラッグで調整できる（spec 4.2 アプリ全体）。
 function App(): JSX.Element {
   const applyFsChanges = useWorkspaceStore((s) => s.applyFsChanges)
+  const restoreLastFolder = useWorkspaceStore((s) => s.restoreLastFolder)
 
   // file watcher の変更通知を購読し、ツリー / エディタに反映する（spec 2.2.5）。
   useEffect(() => {
@@ -17,6 +18,11 @@ function App(): JSX.Element {
     })
     return unsubscribe
   }, [applyFsChanges])
+
+  // 起動時に前回フォルダを自動で開き直す（spec 4.2 最近開いたフォルダの保存）。
+  useEffect(() => {
+    void restoreLastFolder()
+  }, [restoreLastFolder])
 
   return (
     <div className="app">
