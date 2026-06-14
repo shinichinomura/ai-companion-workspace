@@ -7,7 +7,15 @@ export const IpcChannel = {
   ReadFile: 'workspace:read-file',
   WriteFile: 'workspace:write-file',
   // main → renderer への push。file watcher が検知した変更を通知する。
-  FsEvent: 'workspace:fs-event'
+  FsEvent: 'workspace:fs-event',
+
+  // 統合ターミナル（spec 2.2.4）。MVP は単一インスタンス。
+  TerminalStart: 'terminal:start', // R→M invoke: cwd(project root) で PTY 起動
+  TerminalInput: 'terminal:input', // R→M send: キー入力を PTY に書き込む
+  TerminalResize: 'terminal:resize', // R→M send: cols/rows 変更
+  TerminalDispose: 'terminal:dispose', // R→M send: PTY 破棄
+  TerminalData: 'terminal:data', // M→R push: PTY 出力
+  TerminalExit: 'terminal:exit' // M→R push: プロセス終了通知
 } as const
 
 // ファイルツリーの 1 ノード。ディレクトリは遅延展開するため children は持たない。
@@ -64,6 +72,29 @@ export interface FsEventBatch {
   changes: FsChange[]
 }
 
+// terminal:start のリクエスト。初期サイズを渡す（FitAddon の測定結果）。
+export interface TerminalStartRequest {
+  cols: number
+  rows: number
+}
+
+// terminal:start の結果。
+export interface TerminalStartResult {
+  // 起動できなかった場合（フォルダ未選択など）はエラーメッセージを返す。
+  error?: string
+}
+
+// terminal:resize のリクエスト。
+export interface TerminalResizeRequest {
+  cols: number
+  rows: number
+}
+
+// terminal:exit の通知。シェルプロセスの終了コード。
+export interface TerminalExit {
+  exitCode: number
+}
+
 // renderer に公開する API の型。preload で実装し window.api として参照する。
 export interface WorkspaceApi {
   openFolder: () => Promise<OpenFolderResult | null>
@@ -72,4 +103,14 @@ export interface WorkspaceApi {
   writeFile: (req: WriteFileRequest) => Promise<WriteFileResult>
   // file watcher の変更通知を購読する。返り値は購読解除関数。
   onFsEvent: (cb: (batch: FsEventBatch) => void) => () => void
+
+  // 統合ターミナル。project root を cwd に PTY を起動する。
+  terminalStart: (req: TerminalStartRequest) => Promise<TerminalStartResult>
+  terminalInput: (data: string) => void
+  terminalResize: (req: TerminalResizeRequest) => void
+  terminalDispose: () => void
+  // PTY 出力を購読する。返り値は購読解除関数。
+  onTerminalData: (cb: (data: string) => void) => () => void
+  // プロセス終了を購読する。返り値は購読解除関数。
+  onTerminalExit: (cb: (exit: TerminalExit) => void) => () => void
 }

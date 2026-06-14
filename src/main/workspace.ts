@@ -210,3 +210,8 @@ export function registerWorkspaceHandlers(): void {
 export async function disposeWorkspace(): Promise<void> {
   await stopWatching()
 }
+
+// 現在の project root（絶対パス）。未選択は null。ターミナルの cwd に使う。
+export function getProjectRoot(): string | null {
+  return projectRoot
+}

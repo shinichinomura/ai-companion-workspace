@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerWorkspaceHandlers, disposeWorkspace } from './workspace'
+import { registerTerminalHandlers, disposeTerminal } from './terminal'
 
 // メインウィンドウを生成する。
 // セキュリティ方針（spec 2.3.3）に従い、renderer に Node.js API を直接公開しない。
@@ -49,6 +50,8 @@ app.whenReady().then(() => {
 
   // workspace 関連の IPC ハンドラを登録する。
   registerWorkspaceHandlers()
+  // 統合ターミナル関連の IPC ハンドラを登録する。
+  registerTerminalHandlers()
 
   createWindow()
 
@@ -64,7 +67,8 @@ app.on('window-all-closed', () => {
   }
 })
 
-// 終了前に file watcher を後始末する。
+// 終了前に file watcher と PTY を後始末する。
 app.on('will-quit', () => {
   void disposeWorkspace()
+  disposeTerminal()
 })

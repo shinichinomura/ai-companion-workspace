@@ -62,6 +62,15 @@ body {
   padding: 12px;
 }
 
+/* 統合ターミナル本体。xterm をペイン全体に広げる。 */
+.terminal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 4px 0 4px 8px;
+  background: #1e1e1e;
+}
+
 .placeholder {
   color: var(--fg-dim);
   display: flex;
