@@ -4,6 +4,7 @@ import {
   IpcChannel,
   type ReadDirRequest,
   type ReadFileRequest,
+  type WriteFileRequest,
   type WorkspaceApi
 } from '../shared/ipc'
 
@@ -11,7 +12,8 @@ import {
 const api: WorkspaceApi = {
   openFolder: () => ipcRenderer.invoke(IpcChannel.OpenFolder),
   readDir: (req: ReadDirRequest) => ipcRenderer.invoke(IpcChannel.ReadDir, req),
-  readFile: (req: ReadFileRequest) => ipcRenderer.invoke(IpcChannel.ReadFile, req)
+  readFile: (req: ReadFileRequest) => ipcRenderer.invoke(IpcChannel.ReadFile, req),
+  writeFile: (req: WriteFileRequest) => ipcRenderer.invoke(IpcChannel.WriteFile, req)
 }
 
 // contextIsolation が有効なため、contextBridge 経由でのみ公開する。

@@ -7,7 +7,9 @@ import {
   type OpenFolderResult,
   type ReadDirRequest,
   type ReadFileRequest,
-  type ReadFileResult
+  type ReadFileResult,
+  type WriteFileRequest,
+  type WriteFileResult
 } from '../shared/ipc'
 
 // 初期 ignore 対象のディレクトリ名（spec 4.2 / 5.6）。
@@ -99,9 +101,29 @@ async function handleReadFile(_e: unknown, req: ReadFileRequest): Promise<ReadFi
   return { relPath: req.relPath, content: buf.toString('utf8'), isBinary: false }
 }
 
+// ファイル内容を UTF-8 テキストとして書き込む。project root 外は resolveWithinRoot で拒否する。
+// 既存パスがディレクトリの場合は拒否する（新規ファイル作成は許可する）。
+async function handleWriteFile(_e: unknown, req: WriteFileRequest): Promise<WriteFileResult> {
+  const abs = resolveWithinRoot(req.relPath)
+  try {
+    const stat = await fs.stat(abs)
+    if (stat.isDirectory()) {
+      throw new Error(`ディレクトリには書き込めません: ${req.relPath}`)
+    }
+  } catch (err) {
+    // ENOENT（未存在）は新規作成として許可する。それ以外は再送出する。
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw err
+    }
+  }
+  await fs.writeFile(abs, req.content, 'utf8')
+  return { relPath: req.relPath }
+}
+
 // workspace 関連の IPC ハンドラを登録する。app 起動後に 1 度だけ呼ぶ。
 export function registerWorkspaceHandlers(): void {
   ipcMain.handle(IpcChannel.OpenFolder, handleOpenFolder)
   ipcMain.handle(IpcChannel.ReadDir, handleReadDir)
   ipcMain.handle(IpcChannel.ReadFile, handleReadFile)
+  ipcMain.handle(IpcChannel.WriteFile, handleWriteFile)
 }

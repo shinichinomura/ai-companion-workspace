@@ -141,20 +141,22 @@ body {
   text-overflow: ellipsis;
 }
 
-/* エディタ（Step 2 の暫定表示） */
+/* エディタ */
 .editor-body {
   padding: 0;
+  /* Monaco がコンテナいっぱいに広がるよう、スクロールは Monaco 側に任せる */
+  overflow: hidden;
 }
 
-.editor-pre {
-  margin: 0;
-  padding: 12px;
-  font-family: 'SF Mono', Menlo, Monaco, monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre;
-  -webkit-user-select: text;
-  user-select: text;
+/* Monaco Editor のコンテナ。ペインの高さいっぱいに広げる */
+.monaco-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* 未保存インジケータ */
+.dirty-indicator {
+  color: var(--fg);
 }
 
 /* react-resizable-panels のドラッグハンドル */
