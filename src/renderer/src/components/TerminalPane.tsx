@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -29,6 +29,10 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
   // 折りたたみから復帰したときにサイズを測り直すため、fit/term を保持する。
   const fitRef = useRef<FitAddon | null>(null)
   const termRef = useRef<Terminal | null>(null)
+  // PTY 起動処理を header の再起動ボタンからも呼べるよう ref に保持する。
+  const startPtyRef = useRef<(() => void) | null>(null)
+  // PTY が終了済みかどうか。終了時のみ再起動ボタンを出すために使う。
+  const [exited, setExited] = useState(false)
 
   useEffect(() => {
     // フォルダ未選択時はターミナルを起動しない。
@@ -52,13 +56,27 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
     // 初回はレイアウト確定後に測りたいため、サイズが取れるまで安全側に倒す。
     fitAddon.fit()
 
-    // PTY を起動する。初期サイズを渡す。
+    // PTY を起動する。初回起動と、終了後の再起動の両方で使う。
     let disposed = false
-    void window.api.terminalStart({ cols: term.cols, rows: term.rows }).then((res) => {
-      if (res.error) {
-        term.writeln(`\x1b[31m${res.error}\x1b[0m`)
+    const startPty = (): void => {
+      if (disposed) return
+      // 再起動時はコンテナサイズが変わっている可能性があるので測り直す。
+      try {
+        fitAddon.fit()
+      } catch {
+        // サイズが取れないタイミングは無視する。
       }
-    })
+      setExited(false)
+      void window.api.terminalStart({ cols: term.cols, rows: term.rows }).then((res) => {
+        if (disposed) return
+        if (res.error) {
+          term.writeln(`\x1b[31m${res.error}\x1b[0m`)
+          setExited(true)
+        }
+      })
+    }
+    startPtyRef.current = startPty
+    startPty()
 
     // ユーザー入力 → main(PTY)。
     const inputSub = term.onData((data) => {
@@ -70,10 +88,11 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
       if (!disposed) term.write(data)
     })
 
-    // プロセス終了通知。
+    // プロセス終了通知。再起動ボタンを出すため exited を立てる。
     const offExit = window.api.onTerminalExit(({ exitCode }) => {
       if (!disposed) {
         term.writeln(`\r\n\x1b[90m[プロセスが終了しました (code ${exitCode})]\x1b[0m`)
+        setExited(true)
       }
     })
 
@@ -99,8 +118,19 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
       term.dispose()
       fitRef.current = null
       termRef.current = null
+      startPtyRef.current = null
     }
   }, [root])
+
+  // 終了したターミナルを再起動する。header の再起動ボタンから呼ぶ。
+  const restartTerminal = (): void => {
+    const term = termRef.current
+    if (!term) return
+    // 前回の出力を消してから起動し直し、画面を綺麗にする。
+    term.reset()
+    startPtyRef.current?.()
+    term.focus()
+  }
 
   // 定型プロンプトをそのまま PTY に送る（末尾に改行 \r を付けて即実行）。
   // 送信先はユーザーが見ている統合ターミナルなので、折りたたみ中なら開いて見せる。
@@ -150,6 +180,17 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
               </button>
             ))}
         </div>
+        {/* PTY が終了したときだけ再起動ボタンを出す。押すと同じ cwd でシェルを起動し直す。 */}
+        {root && exited && (
+          <button
+            type="button"
+            className="terminal-action-btn terminal-restart-btn"
+            onClick={restartTerminal}
+            title="ターミナルを再起動する"
+          >
+            ↻ 再起動
+          </button>
+        )}
         {/* 左右並べ（horizontal）では最小化しても意味が薄く、畳むと復帰できないため
             最小化ボタンを表示しない。上下並べ（vertical）のときだけ出す。 */}
         {layout === 'vertical' && (

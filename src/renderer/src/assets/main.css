@@ -190,6 +190,14 @@ body {
   cursor: default;
 }
 
+/* PTY 終了時だけ出る再起動ボタン。終了に気づけるよう少し目立たせる。
+   .terminal-actions の外側に置くため、トグルとの間に余白を取る。 */
+.terminal-restart-btn {
+  margin-right: 6px;
+  color: var(--fg);
+  border-color: #555;
+}
+
 /* 開閉トグルのアイコンボタン。 */
 .terminal-toggle {
   display: flex;
