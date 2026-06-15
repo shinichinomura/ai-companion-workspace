@@ -22,6 +22,8 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     titleBarStyle: 'hiddenInset',
+    // 信号機ボタンを、renderer 側で用意する高さ 38px のトップバーの中央に配置する。
+    trafficLightPosition: { x: 12, y: 12 },
     backgroundColor: '#1e1e1e',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

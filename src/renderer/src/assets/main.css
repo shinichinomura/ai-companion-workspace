@@ -31,6 +31,43 @@ body {
 
 .app {
   height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ウィンドウ移動用のトップバー。帯全体をドラッグ領域にする。 */
+.titlebar {
+  flex: 0 0 auto;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  /* 左は信号機ボタン（trafficLightPosition）と重ならないよう余白を確保 */
+  padding: 0 12px 0 78px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.titlebar-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg-dim);
+}
+
+/* トップバー内にボタン等を置く場合はドラッグ対象から除外する */
+.titlebar button,
+.titlebar input,
+.titlebar a {
+  -webkit-app-region: no-drag;
+}
+
+/* トップバーの分、PanelGroup を残り高さに収める */
+.app > [data-panel-group] {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .pane {

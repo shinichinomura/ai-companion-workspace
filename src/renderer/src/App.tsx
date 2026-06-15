@@ -26,6 +26,11 @@ function App(): JSX.Element {
 
   return (
     <div className="app">
+      {/* ウィンドウ移動用のトップバー。-webkit-app-region: drag で帯全体を掴めるようにする。
+          信号機ボタンの領域を空けるため左に余白を取る（main の trafficLightPosition と対応）。 */}
+      <div className="titlebar">
+        <span className="titlebar-title">Atelier</span>
+      </div>
       <PanelGroup direction="horizontal" autoSaveId="main-layout">
         <Panel defaultSize={20} minSize={12} className="pane">
           <FileExplorer />
