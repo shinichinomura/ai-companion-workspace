@@ -1,5 +1,6 @@
 {
   "name": "claude-code-companion-workspace",
+  "productName": "Atelier",
   "version": "0.0.1",
   "description": "Claude Code を使ったローカルプロジェクト作業を支援する Mac 向けワークスペース",
   "main": "./out/main/index.js",
@@ -15,10 +16,12 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "package:mac": "npm run build && electron-builder --mac --arm64",
-    "trial:install": "npm run package:mac && rm -rf '/Applications/claude-code-companion-workspace.app' && cp -R 'dist/mac-arm64/claude-code-companion-workspace.app' /Applications/ && echo 'installed to /Applications'",
+    "trial:install": "npm run package:mac && rm -rf '/Applications/Atelier.app' && cp -R 'dist/mac-arm64/Atelier.app' /Applications/ && echo 'installed to /Applications/Atelier.app'",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
   "build": {
+    "appId": "com.nomura.atelier",
+    "productName": "Atelier",
     "asarUnpack": [
       "node_modules/node-pty/**"
     ]

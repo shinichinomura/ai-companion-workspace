@@ -50,7 +50,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.nomura.claude-code-companion')
+  electronApp.setAppUserModelId('com.nomura.atelier')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

@@ -7,6 +7,8 @@
 Claude Code を使ったローカルプロジェクト作業を支援する **Mac 向け Electron デスクトップアプリ**。
 ファイルエクスプローラー + エディタ/ビューワー + Markdown プレビュー + 統合ターミナルの 3 ペイン構成。
 
+アプリ名は **Atelier**（仮）。bundle id は `com.nomura.atelier`。
+
 **設計の核**: Claude Code を隠れた AI バックエンドとして扱わない。ユーザーが統合ターミナルで `claude` CLI を直接操作し、本アプリはファイルシステム経由でその結果を可視化するだけ。
 
 ## 現在の状況
@@ -70,12 +72,12 @@ Claude Code を使ったローカルプロジェクト作業を支援する **Ma
 開発（コードを書く）と試用（実用性を確認する）を明確に分け、両者を混ぜない。
 
 - **開発**: `npm run dev`（HMR）で起動する。
-- **試用**: `npm run trial:install` でパッケージして `/Applications` に上書きインストールし、そこに置いた `.app` を Finder / Dock から起動して実アプリとして使う。`dist/` から直接起動しない（再ビルドで作り直されるため Dock 参照が不安定になる）。Dock には必ず `/Applications` の `.app` を登録する。
+- **試用**: `npm run trial:install` でパッケージして `/Applications/Atelier.app` に上書きインストールし、そこに置いた `.app` を Finder / Dock から起動して実アプリとして使う。`dist/` から直接起動しない（再ビルドで作り直されるため Dock 参照が不安定になる）。Dock には必ず `/Applications/Atelier.app` を登録する。
 
-両者は **永続データ（最近開いたフォルダ等）を別ディレクトリで管理**するため混ざらない（[src/main/index.ts](src/main/index.ts) 参照）。
+両者は **永続データ（最近開いたフォルダ等）を別ディレクトリで管理**するため混ざらない（[src/main/index.ts](src/main/index.ts) 参照）。userData 名は productName（Atelier）に由来する。
 
-- 開発時の userData: `…/Application Support/claude-code-companion-workspace-dev`
-- 試用版（ビルド版）の userData: `…/Application Support/claude-code-companion-workspace`
+- 開発時の userData: `…/Application Support/Atelier-dev`
+- 試用版（ビルド版）の userData: `…/Application Support/Atelier`
 - 判定は electron-vite dev のみ設定する `ELECTRON_RENDERER_URL` の有無で行う。
 - ペイン幅などの localStorage は origin（`http://localhost` と `file://`）が異なるため自動的に分離される。
 
