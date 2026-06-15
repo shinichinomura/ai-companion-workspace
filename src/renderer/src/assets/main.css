@@ -445,6 +445,13 @@ body {
   margin: 0.2em 0;
 }
 
+.markdown-preview img {
+  /* ペイン幅を超える画像は縮小して収める。縦横比は維持する。 */
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
 .markdown-preview a {
   color: var(--accent);
   text-decoration: none;

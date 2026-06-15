@@ -1,9 +1,10 @@
-import { dialog, ipcMain, BrowserWindow, type WebContents } from 'electron'
+import { dialog, ipcMain, protocol, BrowserWindow, type WebContents } from 'electron'
 import { promises as fs } from 'fs'
-import { basename, join, normalize, relative, sep } from 'path'
+import { basename, extname, join, normalize, relative, sep } from 'path'
 import chokidar, { type FSWatcher } from 'chokidar'
 import {
   IpcChannel,
+  MEDIA_SCHEME,
   type FileNode,
   type FsChange,
   type FsChangeKind,
@@ -231,6 +232,51 @@ async function handleWriteFile(_e: unknown, req: WriteFileRequest): Promise<Writ
   }
   await fs.writeFile(abs, req.content, 'utf8')
   return { relPath: req.relPath }
+}
+
+// Markdown プレビューでの表示を許可する画像拡張子と対応する MIME タイプ。
+// ここに無い拡張子は配信しない（カスタムスキーム経由の任意ファイル読み出しを防ぐ）。
+const IMAGE_MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.bmp': 'image/bmp',
+  '.avif': 'image/avif',
+  '.ico': 'image/x-icon'
+}
+
+// MEDIA_SCHEME のリクエストを処理し、project root 内の画像ファイルを返す。
+// URL は mediaUrl() が生成する `atelier-img://r/<encoded relPath>` 形式。
+// project root 外・存在しない・非画像・フォルダ未選択はいずれもエラー応答にする。
+async function handleMediaRequest(request: Request): Promise<Response> {
+  try {
+    const url = new URL(request.url)
+    // pathname は '/photos/foo.png' のような形。先頭 '/' を除いて relPath に戻す。
+    const relPath = decodeURIComponent(url.pathname).replace(/^\/+/, '')
+    if (!relPath) return new Response(null, { status: 404 })
+
+    // project root 外・未選択は resolveWithinRoot が例外を投げる（catch で 404）。
+    const abs = resolveWithinRoot(relPath)
+    const mime = IMAGE_MIME[extname(abs).toLowerCase()]
+    // 許可した画像拡張子以外は配信しない。
+    if (!mime) return new Response(null, { status: 415 })
+
+    const stat = await fs.stat(abs)
+    if (!stat.isFile()) return new Response(null, { status: 404 })
+
+    const buf = await fs.readFile(abs)
+    return new Response(buf, { headers: { 'content-type': mime } })
+  } catch {
+    return new Response(null, { status: 404 })
+  }
+}
+
+// 画像表示用カスタムスキームのハンドラを登録する。app ready 後に 1 度だけ呼ぶ。
+export function registerMediaProtocol(): void {
+  protocol.handle(MEDIA_SCHEME, handleMediaRequest)
 }
 
 // workspace 関連の IPC ハンドラを登録する。app 起動後に 1 度だけ呼ぶ。

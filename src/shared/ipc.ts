@@ -28,6 +28,23 @@ export const IpcChannel = {
   TerminalExit: 'terminal:exit' // M→R push: プロセス終了通知
 } as const
 
+// Markdown プレビューで画像を表示するためのカスタムスキーム。
+// renderer は img の src をこのスキームの URL に書き換え、main 側のハンドラが
+// project root 内のファイルとして読み出して返す（project root 外・非画像は拒否）。
+export const MEDIA_SCHEME = 'atelier-img'
+
+// project root 相対パス（'/' 区切り）を MEDIA_SCHEME の URL に変換する。
+// 各セグメントを encodeURIComponent し、空白や日本語を含むパスも安全に運ぶ。
+// host は固定値 'r'（root の意）。main 側は pathname を decode して relPath に戻す。
+export function mediaUrl(relPath: string): string {
+  const encoded = relPath
+    .split('/')
+    .filter((seg) => seg.length > 0)
+    .map(encodeURIComponent)
+    .join('/')
+  return `${MEDIA_SCHEME}://r/${encoded}`
+}
+
 // Editor と Terminal の並べ方。'horizontal' = 左右, 'vertical' = 上下。
 export type WorkLayout = 'horizontal' | 'vertical'
 

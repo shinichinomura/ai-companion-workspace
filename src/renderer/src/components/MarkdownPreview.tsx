@@ -1,48 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useWorkspaceStore } from '../store/workspace'
-import { renderMarkdown } from './markdown'
-
-// プレビュー内リンクの href を project root 相対パスへ解決する。
-// baseRelPath は現在表示中ファイルの relPath。先頭 '/' は root 基準、
-// それ以外は現在ファイルのディレクトリ基準で解決する。
-// スキーム付き（http: など）・プロトコル相対・アンカーのみ・root より上へ出る
-// 場合は対象外として null を返す。
-function resolveLinkPath(baseRelPath: string, href: string): string | null {
-  // http:/https:/mailto: 等のスキーム付き、`//host` のプロトコル相対、`#anchor` は対象外。
-  if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//') || href.startsWith('#')) {
-    return null
-  }
-  // フラグメント・クエリを除いたパス部分だけを使う。
-  const pathPart = href.split('#')[0].split('?')[0]
-  if (!pathPart) return null
-
-  let decoded: string
-  try {
-    decoded = decodeURIComponent(pathPart)
-  } catch {
-    decoded = pathPart
-  }
-
-  const fromRoot = decoded.startsWith('/')
-  // 解決の起点。root 基準なら空、相対なら現在ファイルのディレクトリ。
-  const baseDir = fromRoot
-    ? ''
-    : baseRelPath.slice(0, Math.max(0, baseRelPath.lastIndexOf('/')))
-  const stack = baseDir ? baseDir.split('/') : []
-
-  for (const seg of (fromRoot ? decoded.slice(1) : decoded).split('/')) {
-    if (seg === '' || seg === '.') continue
-    if (seg === '..') {
-      // root より上へは出さない（main 側の拒否に頼らず renderer でも防ぐ）。
-      if (stack.length === 0) return null
-      stack.pop()
-      continue
-    }
-    stack.push(seg)
-  }
-  if (stack.length === 0) return null
-  return stack.join('/')
-}
+import { renderMarkdown, resolveLinkPath } from './markdown'
 
 // Markdown のレンダリング済みプレビュー。
 // content は編集中の最新内容を受け取り、サニタイズ済み HTML として表示する。
@@ -51,8 +9,9 @@ function MarkdownPreview({ content }: { content: string }): JSX.Element {
   const activeRelPath = useWorkspaceStore((s) => s.activeFile?.relPath ?? '')
   const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
 
-  // 変換コストを抑えるため content が変わったときだけ再変換する。
-  const html = useMemo(() => renderMarkdown(content), [content])
+  // 変換コストを抑えるため content / 表示中ファイルが変わったときだけ再変換する。
+  // activeRelPath は相対パス画像の解決起点に使う（markdown 側で URL 化する）。
+  const html = useMemo(() => renderMarkdown(content, activeRelPath), [content, activeRelPath])
 
   // プレビュー内リンクのクリックを横取りする。
   // - `#anchor`        : 同一ドキュメント内スクロール

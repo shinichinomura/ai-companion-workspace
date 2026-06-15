@@ -1,9 +1,14 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, BrowserWindow, protocol } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { registerWorkspaceHandlers, disposeWorkspace } from './workspace'
+import {
+  registerWorkspaceHandlers,
+  registerMediaProtocol,
+  disposeWorkspace
+} from './workspace'
 import { registerTerminalHandlers, disposeTerminal } from './terminal'
 import { buildAppMenu, registerMenuHandlers } from './menu'
+import { MEDIA_SCHEME } from '../shared/ipc'
 
 // 開発(HMR)と試用(ビルド版)で永続データ（recent-workspaces.json 等）が混ざらないよう、
 // 開発時だけ userData ディレクトリを分ける。
@@ -12,6 +17,16 @@ import { buildAppMenu, registerMenuHandlers } from './menu'
 if (process.env['ELECTRON_RENDERER_URL']) {
   app.setPath('userData', `${app.getPath('userData')}-dev`)
 }
+
+// Markdown プレビューの画像表示に使うカスタムスキームを特権スキームとして登録する。
+// img の src として読み込めるよう standard/secure 扱いにする。
+// この登録は app ready より前に行う必要があるため、モジュール読み込み時点で実行する。
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: MEDIA_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true }
+  }
+])
 
 // メインウィンドウを生成する。
 // セキュリティ方針（spec 2.3.3）に従い、renderer に Node.js API を直接公開しない。
@@ -61,6 +76,8 @@ app.whenReady().then(() => {
 
   // workspace 関連の IPC ハンドラを登録する。
   registerWorkspaceHandlers()
+  // Markdown プレビューの画像表示用カスタムスキームのハンドラを登録する。
+  registerMediaProtocol()
   // 統合ターミナル関連の IPC ハンドラを登録する。
   registerTerminalHandlers()
   // 表示メニューのレイアウト連携 IPC を登録し、アプリメニューを構築する。
