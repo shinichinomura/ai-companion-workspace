@@ -83,7 +83,11 @@ body {
 
 .pane-header {
   flex: 0 0 auto;
-  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  /* 3 ペインのヘッダ高さを揃える。terminal-header と同じ 30px に統一する。 */
+  height: 30px;
+  padding: 0 12px;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
