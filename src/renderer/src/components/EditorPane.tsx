@@ -2,11 +2,18 @@ import { useState } from 'react'
 import { useWorkspaceStore, isDirty } from '../store/workspace'
 import MonacoEditor from './MonacoEditor'
 import MarkdownPreview from './MarkdownPreview'
+import CsvPreview from './CsvPreview'
 
 // Markdown として扱う拡張子か判定する。
 function isMarkdown(relPath: string): boolean {
   const lower = relPath.toLowerCase()
   return lower.endsWith('.md') || lower.endsWith('.markdown')
+}
+
+// CSV / TSV として扱う拡張子か判定する。
+function isCsv(relPath: string): boolean {
+  const lower = relPath.toLowerCase()
+  return lower.endsWith('.csv') || lower.endsWith('.tsv')
 }
 
 // 中央ペイン: エディタ / ビューワー。Monaco Editor でテキスト編集と保存を行う。
@@ -19,6 +26,9 @@ function EditorPane(): JSX.Element {
 
   const dirty = isDirty(activeFile)
   const markdown = activeFile != null && !activeFile.isBinary && isMarkdown(activeFile.relPath)
+  const csv = activeFile != null && !activeFile.isBinary && isCsv(activeFile.relPath)
+  // Edit / Preview トグルを出せるファイル（Markdown または CSV/TSV）。
+  const previewable = markdown || csv
 
   // Edit / Preview の表示状態。ストアに持たせずペイン内で管理する。
   // 表示ファイルを切り替えてもモード選択は維持する。
@@ -31,7 +41,7 @@ function EditorPane(): JSX.Element {
           <>
             {activeFile.name}
             {dirty && <span className="dirty-indicator" title="未保存の変更があります"> ●</span>}
-            {markdown && (
+            {previewable && (
               <span className="view-toggle">
                 <button
                   className={`view-toggle-btn${view === 'edit' ? ' active' : ''}`}
@@ -75,7 +85,7 @@ function EditorPane(): JSX.Element {
           </button>
         </div>
       )}
-      <div className={`pane-body${markdown && view === 'preview' ? '' : ' editor-body'}`}>
+      <div className={`pane-body${previewable && view === 'preview' ? '' : ' editor-body'}`}>
         {!activeFile ? (
           <div className="placeholder">ファイルが選択されていません</div>
         ) : activeFile.isBinary ? (
@@ -83,6 +93,9 @@ function EditorPane(): JSX.Element {
         ) : markdown && view === 'preview' ? (
           // 編集中の最新内容（content）をプレビューする。
           <MarkdownPreview content={activeFile.content} />
+        ) : csv && view === 'preview' ? (
+          // 編集中の最新内容（content）をテーブルとしてプレビューする。
+          <CsvPreview content={activeFile.content} relPath={activeFile.relPath} />
         ) : (
           <MonacoEditor
             path={activeFile.relPath}

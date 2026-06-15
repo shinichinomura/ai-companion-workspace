@@ -653,6 +653,37 @@ body {
   margin-right: 0.4em;
 }
 
+/* ===== CSV / TSV プレビュー ===== */
+
+/* Markdown のテーブルと同じ見た目でデータを表示する。 */
+.csv-preview {
+  padding-left: 20px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.csv-preview table {
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.csv-preview th,
+.csv-preview td {
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
+  white-space: pre-wrap;
+  vertical-align: top;
+}
+
+.csv-preview th {
+  background: var(--bg-elev);
+  position: sticky;
+  top: 0;
+  /* スクロール時にヘッダ境界が透けないよう、背景の下に枠線を補う。 */
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
 /* ===== 設定モーダル ===== */
 
 /* 画面全体を覆うオーバーレイ。クリックで閉じる。 */
