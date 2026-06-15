@@ -272,6 +272,8 @@ body {
   flex: 0 0 auto;
   color: var(--fg-dim);
   font-size: 18px;
+  position: relative;
+  top: -2px;
 }
 
 .tree-icon {
