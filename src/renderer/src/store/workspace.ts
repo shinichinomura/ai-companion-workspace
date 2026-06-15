@@ -1,5 +1,10 @@
 import { create } from 'zustand'
-import type { FileNode, FsEventBatch, OpenFolderResult } from '../../../shared/ipc'
+import type {
+  FileNode,
+  FsEventBatch,
+  GitFileStatus,
+  OpenFolderResult
+} from '../../../shared/ipc'
 
 // 開いているファイルの状態。
 export interface OpenFile {
@@ -75,7 +80,9 @@ async function applyOpenResult(
     rootName: result.name,
     childrenByDir: { '': rootChildren },
     expandedDirs: new Set(),
-    activeFile: null
+    activeFile: null,
+    // 前のフォルダの Git status を持ち越さない。直後に refreshGitStatus で埋め直す。
+    gitStatuses: {}
   })
 }
 
@@ -97,6 +104,9 @@ interface WorkspaceState {
 
   // 隠しファイル（. で始まる名前）をツリーに表示するか。
   showHidden: boolean
+
+  // ファイルの Git status。project root 相対パス → 状態。非リポジトリ・変更なしは空。
+  gitStatuses: Record<string, GitFileStatus>
 
   // 操作。
   openFolder: () => Promise<void>
@@ -123,6 +133,8 @@ interface WorkspaceState {
   dismissExternalChange: () => void
   // 隠しファイルの表示設定を切り替える（localStorage にも保存する）。
   setShowHidden: (show: boolean) => void
+  // Git status を main から取得し直してツリー表示に反映する。
+  refreshGitStatus: () => Promise<void>
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -133,11 +145,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   activeFile: null,
   recentFolders: [],
   showHidden: loadShowHidden(),
+  gitStatuses: {},
 
   // フォルダを開き、ルート直下を読み込む。
   openFolder: async () => {
     const result = await window.api.openFolder()
     await applyOpenResult(result, set)
+    await get().refreshGitStatus()
     await get().loadRecentFolders()
   },
 
@@ -155,6 +169,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (!last) return
     const result = await window.api.openFolderByPath({ path: last })
     await applyOpenResult(result, set)
+    await get().refreshGitStatus()
     // 開けずに一覧から除外された場合に備えて再取得する。
     await get().loadRecentFolders()
   },
@@ -163,6 +178,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   openFolderByPath: async (path: string) => {
     const result = await window.api.openFolderByPath({ path })
     await applyOpenResult(result, set)
+    await get().refreshGitStatus()
     await get().loadRecentFolders()
   },
 
@@ -276,6 +292,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return { childrenByDir, expandedDirs }
     })
 
+    // ディスク上の変更に追従して Git status も取り直す（追加/変更/削除マークの更新）。
+    void get().refreshGitStatus()
+
     // 2. 開いているファイルへの反映。
     const active = get().activeFile
     if (!active) return
@@ -337,5 +356,23 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setShowHidden: (show: boolean) => {
     localStorage.setItem(SHOW_HIDDEN_STORAGE_KEY, show ? 'true' : 'false')
     set({ showHidden: show })
+  },
+
+  // Git status を main から取得し直す。フォルダ未選択・非リポジトリ・失敗時は空にする。
+  refreshGitStatus: async () => {
+    if (!get().root) {
+      set({ gitStatuses: {} })
+      return
+    }
+    // 取得開始時点の root を控え、応答が返るまでにフォルダが切り替わっていたら破棄する。
+    const rootAtRequest = get().root
+    try {
+      const result = await window.api.getGitStatus()
+      if (get().root !== rootAtRequest) return
+      set({ gitStatuses: result.isRepo ? result.statuses : {} })
+    } catch {
+      if (get().root !== rootAtRequest) return
+      set({ gitStatuses: {} })
+    }
   }
 }))

@@ -14,6 +14,10 @@ export const IpcChannel = {
   OpenPath: 'workspace:open-path',
   // main → renderer への push。file watcher が検知した変更を通知する。
   FsEvent: 'workspace:fs-event',
+  // R→M invoke: 現在の project root の Git status（追加/変更/削除）を取得する。
+  GitStatus: 'workspace:git-status',
+  // M→R push: .git（index/HEAD/refs）の変化を検知した。renderer は GitStatus を取り直す。
+  GitStatusChanged: 'workspace:git-status-changed',
 
   // 表示メニュー（ネイティブアプリメニュー）と renderer の連携。
   // M→R push: メニューの「表示」でレイアウト切り替えが選ばれた。
@@ -62,6 +66,20 @@ export interface FileNode {
   relPath: string
   name: string
   isDirectory: boolean
+}
+
+// ファイル 1 件の Git status。3 状態に集約する（spec Phase 2）。
+//   added    … 新規（untracked、または index へ add 済み）
+//   modified … 変更
+//   deleted  … 削除（ディスク上に無い。ツリーにはファントム行として復元表示する）
+export type GitFileStatus = 'added' | 'modified' | 'deleted'
+
+// Git status の取得結果。
+export interface GitStatusResult {
+  // project root が Git リポジトリ（配下）か。false ならマークは一切出さない。
+  isRepo: boolean
+  // project root 相対パス（'/' 区切り）→ status のマップ。変更の無いファイルは含まない。
+  statuses: Record<string, GitFileStatus>
 }
 
 // Open Folder の結果。キャンセル時は null。
@@ -157,6 +175,10 @@ export interface WorkspaceApi {
   openPath: (req: OpenPathRequest) => Promise<string>
   // file watcher の変更通知を購読する。返り値は購読解除関数。
   onFsEvent: (cb: (batch: FsEventBatch) => void) => () => void
+  // 現在の project root の Git status を取得する。非リポジトリなら isRepo=false。
+  getGitStatus: () => Promise<GitStatusResult>
+  // .git の変化（commit / add / checkout 等）通知を購読する。返り値は購読解除関数。
+  onGitStatusChanged: (cb: () => void) => () => void
 
   // 表示メニューからのレイアウト切り替えを購読する。返り値は購読解除関数。
   onSetWorkLayout: (cb: (layout: WorkLayout) => void) => () => void

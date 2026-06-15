@@ -287,8 +287,51 @@ body {
 }
 
 .tree-label {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Git status マーク（右端のレター）。色はファイル名と揃える。 */
+.tree-git {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  width: 12px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Git status の配色（VSCode の gitDecoration に準拠）。
+   追加=グリーン / 変更=オレンジ / 削除=レッド。 */
+.tree-label.git-added,
+.tree-git.git-added {
+  color: #81b88b;
+}
+
+.tree-label.git-modified,
+.tree-git.git-modified {
+  color: #e2c08d;
+}
+
+.tree-label.git-deleted,
+.tree-git.git-deleted {
+  color: #c74e39;
+}
+
+/* 削除（ファントム）行はディスク上に無いので、取り消し線で示し操作不可にする。 */
+.tree-row.deleted {
+  cursor: default;
+}
+
+.tree-label.git-deleted {
+  text-decoration: line-through;
+}
+
+/* 変更を含むフォルダは、開かなくても分かるようフォルダ名を変更色で示す。 */
+.tree-label.git-dir-changed {
+  color: #e2c08d;
 }
 
 /* エディタ */

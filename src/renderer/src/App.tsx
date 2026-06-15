@@ -25,6 +25,7 @@ function App(): JSX.Element {
   const restoreLastFolder = useWorkspaceStore((s) => s.restoreLastFolder)
   const openFolder = useWorkspaceStore((s) => s.openFolder)
   const setShowHidden = useWorkspaceStore((s) => s.setShowHidden)
+  const refreshGitStatus = useWorkspaceStore((s) => s.refreshGitStatus)
 
   // Editor / Terminal の並べ方。ネイティブの「表示」メニューで切り替え、localStorage に保存する。
   const [layout, setLayout] = useState<WorkLayout>(loadLayout)
@@ -106,6 +107,14 @@ function App(): JSX.Element {
     })
     return unsubscribe
   }, [applyFsChanges])
+
+  // .git の変化（ターミナルでの commit / add / checkout 等）を購読し、Git status を取り直す。
+  useEffect(() => {
+    const unsubscribe = window.api.onGitStatusChanged(() => {
+      void refreshGitStatus()
+    })
+    return unsubscribe
+  }, [refreshGitStatus])
 
   // 起動時に前回フォルダを自動で開き直す（spec 4.2 最近開いたフォルダの保存）。
   useEffect(() => {

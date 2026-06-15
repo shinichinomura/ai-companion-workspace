@@ -31,6 +31,12 @@ const api: WorkspaceApi = {
     // 購読解除関数を返す。
     return () => ipcRenderer.removeListener(IpcChannel.FsEvent, listener)
   },
+  getGitStatus: () => ipcRenderer.invoke(IpcChannel.GitStatus),
+  onGitStatusChanged: (cb: () => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IpcChannel.GitStatusChanged, listener)
+    return () => ipcRenderer.removeListener(IpcChannel.GitStatusChanged, listener)
+  },
 
   onSetWorkLayout: (cb: (layout: WorkLayout) => void) => {
     const listener = (_e: unknown, layout: WorkLayout): void => cb(layout)

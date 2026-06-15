@@ -19,6 +19,7 @@ import {
   type OpenPathRequest
 } from '../shared/ipc'
 import { addRecentFolder, loadRecentFolders, removeRecentFolder } from './settings'
+import { startGitWatching, stopGitWatching } from './git'
 
 // 初期 ignore 対象のディレクトリ名（spec 4.2 / 5.6）。
 const IGNORED_DIRS = new Set([
@@ -89,6 +90,8 @@ async function startWatching(root: string, target: WebContents): Promise<void> {
     .on('unlink', (p) => enqueueChange('unlink', p))
     .on('addDir', (p) => enqueueChange('addDir', p))
     .on('unlinkDir', (p) => enqueueChange('unlinkDir', p))
+  // .git（index/HEAD/refs）も監視し、ターミナルでの commit/add 等を Git status に反映する。
+  await startGitWatching(root, target)
 }
 
 // 監視を停止し、保留中の通知も破棄する。
@@ -99,6 +102,7 @@ async function stopWatching(): Promise<void> {
   }
   pendingChanges = []
   watchTarget = null
+  await stopGitWatching()
   if (watcher) {
     const w = watcher
     watcher = null

@@ -1,13 +1,82 @@
-import type { FileNode } from '../../../shared/ipc'
+import { useMemo } from 'react'
+import type { FileNode, GitFileStatus } from '../../../shared/ipc'
 import { useWorkspaceStore } from '../store/workspace'
+
+// relPath の親ディレクトリ relPath（トップレベルは ''）。
+function parentDir(relPath: string): string {
+  const idx = relPath.lastIndexOf('/')
+  return idx === -1 ? '' : relPath.slice(0, idx)
+}
+
+// relPath の末尾セグメント（表示名）。
+function baseName(relPath: string): string {
+  const idx = relPath.lastIndexOf('/')
+  return idx === -1 ? relPath : relPath.slice(idx + 1)
+}
+
+// ディレクトリ先・名前順のソート（readDir と同じ規則）。
+function sortNodes(nodes: FileNode[]): FileNode[] {
+  return [...nodes].sort((a, b) => {
+    if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+    return a.name.localeCompare(b.name)
+  })
+}
+
+// 実ノードに、その階層の「削除（ファントム）」ノードを合流させる。
+// 削除ファイルはディスク上に無く readDir に現れないため、Git status から行を復元する。
+function withDeletedPhantoms(
+  dir: string,
+  real: FileNode[],
+  statuses: Record<string, GitFileStatus>
+): FileNode[] {
+  const existing = new Set(real.map((n) => n.relPath))
+  const phantoms: FileNode[] = []
+  for (const [p, st] of Object.entries(statuses)) {
+    if (st !== 'deleted') continue
+    if (parentDir(p) !== dir) continue
+    // 同名ファイルが再作成され実ノードがある場合は重複させない。
+    if (existing.has(p)) continue
+    phantoms.push({ relPath: p, name: baseName(p), isDirectory: false })
+  }
+  return phantoms.length === 0 ? real : sortNodes([...real, ...phantoms])
+}
 
 // 隠しファイル表示が off のとき、. で始まる名前のノードを除外する。
 function visibleNodes(nodes: FileNode[], showHidden: boolean): FileNode[] {
   return showHidden ? nodes : nodes.filter((n) => !n.name.startsWith('.'))
 }
 
+// 変更を含む祖先ディレクトリ（フォルダ名を色づけする対象）の集合を作る。
+function computeChangedDirs(statuses: Record<string, GitFileStatus>): Set<string> {
+  const set = new Set<string>()
+  for (const p of Object.keys(statuses)) {
+    let d = parentDir(p)
+    // d が '' になるまで（= トップレベルに達するまで）祖先を辿って印を付ける。
+    while (d !== '') {
+      if (set.has(d)) break // ここから上は登録済み。
+      set.add(d)
+      d = parentDir(d)
+    }
+  }
+  return set
+}
+
+// Git status のレター（追加=A / 変更=M / 削除=D）。
+const STATUS_LETTER: Record<GitFileStatus, string> = {
+  added: 'A',
+  modified: 'M',
+  deleted: 'D'
+}
+
+interface TreeProps {
+  node: FileNode
+  depth: number
+  statuses: Record<string, GitFileStatus>
+  changedDirs: Set<string>
+}
+
 // ツリーの 1 ノード。ディレクトリは展開状態に応じて子を再帰描画する。
-function TreeNode({ node, depth }: { node: FileNode; depth: number }): JSX.Element {
+function TreeNode({ node, depth, statuses, changedDirs }: TreeProps): JSX.Element {
   const expandedDirs = useWorkspaceStore((s) => s.expandedDirs)
   const childrenByDir = useWorkspaceStore((s) => s.childrenByDir)
   const activeFile = useWorkspaceStore((s) => s.activeFile)
@@ -19,7 +88,22 @@ function TreeNode({ node, depth }: { node: FileNode; depth: number }): JSX.Eleme
   const isActive = !node.isDirectory && activeFile?.relPath === node.relPath
   const children = childrenByDir[node.relPath]
 
+  // ファイルの Git status（ディレクトリは status を持たない）。
+  const status = node.isDirectory ? undefined : statuses[node.relPath]
+  // 削除（ファントム）行はディスク上に無いので開けない。
+  const isDeleted = status === 'deleted'
+  // 変更を含むフォルダはフォルダ名を色づけする。
+  const dirChanged = node.isDirectory && changedDirs.has(node.relPath)
+
+  // ラベル（ファイル名）の色クラス。
+  const labelClass = status
+    ? ` git-${status}`
+    : dirChanged
+      ? ' git-dir-changed'
+      : ''
+
   const handleClick = (): void => {
+    if (isDeleted) return
     if (node.isDirectory) {
       void toggleDir(node.relPath)
     } else {
@@ -27,25 +111,38 @@ function TreeNode({ node, depth }: { node: FileNode; depth: number }): JSX.Eleme
     }
   }
 
+  // 展開時の子: 実ノード + 削除ファントム → 隠しファイルフィルタ。
+  const renderedChildren =
+    isExpanded && children
+      ? visibleNodes(withDeletedPhantoms(node.relPath, children, statuses), showHidden)
+      : []
+
   return (
     <>
       <div
-        className={`tree-row${isActive ? ' active' : ''}`}
+        className={`tree-row${isActive ? ' active' : ''}${isDeleted ? ' deleted' : ''}`}
         style={{ paddingLeft: 8 + depth * 14 }}
         onClick={handleClick}
         title={node.name}
       >
-        <span className="tree-twisty">
-          {node.isDirectory ? (isExpanded ? '▾' : '▸') : ''}
-        </span>
+        <span className="tree-twisty">{node.isDirectory ? (isExpanded ? '▾' : '▸') : ''}</span>
         <span className="tree-icon">{node.isDirectory ? '📁' : '📄'}</span>
-        <span className="tree-label">{node.name}</span>
+        <span className={`tree-label${labelClass}`}>{node.name}</span>
+        {status && (
+          <span className={`tree-git git-${status}`} aria-label={status}>
+            {STATUS_LETTER[status]}
+          </span>
+        )}
       </div>
-      {isExpanded &&
-        children &&
-        visibleNodes(children, showHidden).map((child) => (
-          <TreeNode key={child.relPath} node={child} depth={depth + 1} />
-        ))}
+      {renderedChildren.map((child) => (
+        <TreeNode
+          key={child.relPath}
+          node={child}
+          depth={depth + 1}
+          statuses={statuses}
+          changedDirs={changedDirs}
+        />
+      ))}
     </>
   )
 }
@@ -87,6 +184,15 @@ function FileExplorer(): JSX.Element {
   const rootName = useWorkspaceStore((s) => s.rootName)
   const rootChildren = useWorkspaceStore((s) => s.childrenByDir[''])
   const showHidden = useWorkspaceStore((s) => s.showHidden)
+  const gitStatuses = useWorkspaceStore((s) => s.gitStatuses)
+
+  // 変更を含むフォルダ集合は statuses が変わったときだけ作り直す。
+  const changedDirs = useMemo(() => computeChangedDirs(gitStatuses), [gitStatuses])
+
+  // ルート直下も削除ファントムを合流させてから描画する。
+  const rootNodes = rootChildren
+    ? visibleNodes(withDeletedPhantoms('', rootChildren, gitStatuses), showHidden)
+    : null
 
   return (
     <div className="pane-inner">
@@ -94,9 +200,15 @@ function FileExplorer(): JSX.Element {
         <span className="explorer-title">{rootName ?? 'Explorer'}</span>
       </div>
       <div className="pane-body tree">
-        {rootChildren ? (
-          visibleNodes(rootChildren, showHidden).map((node) => (
-            <TreeNode key={node.relPath} node={node} depth={0} />
+        {rootNodes ? (
+          rootNodes.map((node) => (
+            <TreeNode
+              key={node.relPath}
+              node={node}
+              depth={0}
+              statuses={gitStatuses}
+              changedDirs={changedDirs}
+            />
           ))
         ) : (
           <RecentFolders />
