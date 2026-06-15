@@ -15,6 +15,7 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "package:mac": "npm run build && electron-builder --mac --arm64",
+    "trial:install": "npm run package:mac && rm -rf '/Applications/claude-code-companion-workspace.app' && cp -R 'dist/mac-arm64/claude-code-companion-workspace.app' /Applications/ && echo 'installed to /Applications'",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
   "build": {

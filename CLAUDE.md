@@ -70,7 +70,7 @@ Claude Code を使ったローカルプロジェクト作業を支援する **Ma
 開発（コードを書く）と試用（実用性を確認する）を明確に分け、両者を混ぜない。
 
 - **開発**: `npm run dev`（HMR）で起動する。
-- **試用**: `npm run package:mac` でパッケージした `dist/` 配下の `.app` を Finder / Dock から起動して、実アプリとして使う。
+- **試用**: `npm run trial:install` でパッケージして `/Applications` に上書きインストールし、そこに置いた `.app` を Finder / Dock から起動して実アプリとして使う。`dist/` から直接起動しない（再ビルドで作り直されるため Dock 参照が不安定になる）。Dock には必ず `/Applications` の `.app` を登録する。
 
 両者は **永続データ（最近開いたフォルダ等）を別ディレクトリで管理**するため混ざらない（[src/main/index.ts](src/main/index.ts) 参照）。
 
@@ -82,7 +82,8 @@ Claude Code を使ったローカルプロジェクト作業を支援する **Ma
 ## コマンド
 
 - `npm run dev` — electron-vite 開発サーバー（HMR）でアプリを起動（**開発用**）
-- `npm run package:mac` — macOS arm64 向けにパッケージング（electron-builder）。生成された `.app` を起動して**試用**する
+- `npm run trial:install` — パッケージして `/Applications` に上書きインストールする（**試用用**。Dock 登録した `.app` を更新するときはこれを実行）
+- `npm run package:mac` — macOS arm64 向けにパッケージングのみ（`dist/` に出力。インストールはしない）
 - `npm run build` — typecheck + main/preload/renderer をビルド（`out/` に出力）
 - `npm run typecheck` — main(node) と renderer(web) の型チェック
 - `npm run start` — ビルド済み `out/` を Electron で起動（HMR なし。試用版 .app の手前の素早い確認用）
