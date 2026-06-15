@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerWorkspaceHandlers, disposeWorkspace } from './workspace'
 import { registerTerminalHandlers, disposeTerminal } from './terminal'
+import { buildAppMenu, registerMenuHandlers } from './menu'
 
 // 開発(HMR)と試用(ビルド版)で永続データ（recent-workspaces.json 等）が混ざらないよう、
 // 開発時だけ userData ディレクトリを分ける。
@@ -62,6 +63,9 @@ app.whenReady().then(() => {
   registerWorkspaceHandlers()
   // 統合ターミナル関連の IPC ハンドラを登録する。
   registerTerminalHandlers()
+  // 表示メニューのレイアウト連携 IPC を登録し、アプリメニューを構築する。
+  registerMenuHandlers()
+  buildAppMenu()
 
   createWindow()
 

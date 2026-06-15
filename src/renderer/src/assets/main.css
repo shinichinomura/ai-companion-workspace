@@ -288,6 +288,21 @@ body {
   inset: 0 -3px;
 }
 
+/* Editor / Terminal をまとめる内側グループは親 Panel を埋める */
+.work-group {
+  height: 100%;
+}
+
+/* 上下並び（vertical）のときは横線のハンドルにする */
+[data-panel-group-direction='vertical'] > .resize-handle {
+  width: 100%;
+  height: 1px;
+}
+
+[data-panel-group-direction='vertical'] > .resize-handle::after {
+  inset: -3px 0;
+}
+
 /* Markdown の Edit / Preview 切替トグル */
 .view-toggle {
   margin-left: 10px;

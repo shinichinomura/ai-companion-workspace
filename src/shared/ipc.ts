@@ -13,6 +13,12 @@ export const IpcChannel = {
   // main → renderer への push。file watcher が検知した変更を通知する。
   FsEvent: 'workspace:fs-event',
 
+  // 表示メニュー（ネイティブアプリメニュー）と renderer の連携。
+  // M→R push: メニューの「表示」でレイアウト切り替えが選ばれた。
+  SetWorkLayout: 'view:set-work-layout',
+  // R→M send: renderer の現在レイアウトを通知し、メニューのチェック状態を同期する。
+  WorkLayoutChanged: 'view:work-layout-changed',
+
   // 統合ターミナル（spec 2.2.4）。MVP は単一インスタンス。
   TerminalStart: 'terminal:start', // R→M invoke: cwd(project root) で PTY 起動
   TerminalInput: 'terminal:input', // R→M send: キー入力を PTY に書き込む
@@ -21,6 +27,9 @@ export const IpcChannel = {
   TerminalData: 'terminal:data', // M→R push: PTY 出力
   TerminalExit: 'terminal:exit' // M→R push: プロセス終了通知
 } as const
+
+// Editor と Terminal の並べ方。'horizontal' = 左右, 'vertical' = 上下。
+export type WorkLayout = 'horizontal' | 'vertical'
 
 // ファイルツリーの 1 ノード。ディレクトリは遅延展開するため children は持たない。
 export interface FileNode {
@@ -116,6 +125,11 @@ export interface WorkspaceApi {
   writeFile: (req: WriteFileRequest) => Promise<WriteFileResult>
   // file watcher の変更通知を購読する。返り値は購読解除関数。
   onFsEvent: (cb: (batch: FsEventBatch) => void) => () => void
+
+  // 表示メニューからのレイアウト切り替えを購読する。返り値は購読解除関数。
+  onSetWorkLayout: (cb: (layout: WorkLayout) => void) => () => void
+  // 現在のレイアウトを main に通知し、メニューのチェック状態を同期する。
+  reportWorkLayout: (layout: WorkLayout) => void
 
   // 統合ターミナル。project root を cwd に PTY を起動する。
   terminalStart: (req: TerminalStartRequest) => Promise<TerminalStartResult>

@@ -10,6 +10,7 @@ import {
   type TerminalResizeRequest,
   type TerminalStartRequest,
   type WriteFileRequest,
+  type WorkLayout,
   type WorkspaceApi
 } from '../shared/ipc'
 
@@ -28,6 +29,14 @@ const api: WorkspaceApi = {
     // 購読解除関数を返す。
     return () => ipcRenderer.removeListener(IpcChannel.FsEvent, listener)
   },
+
+  onSetWorkLayout: (cb: (layout: WorkLayout) => void) => {
+    const listener = (_e: unknown, layout: WorkLayout): void => cb(layout)
+    ipcRenderer.on(IpcChannel.SetWorkLayout, listener)
+    return () => ipcRenderer.removeListener(IpcChannel.SetWorkLayout, listener)
+  },
+  reportWorkLayout: (layout: WorkLayout) =>
+    ipcRenderer.send(IpcChannel.WorkLayoutChanged, layout),
 
   terminalStart: (req: TerminalStartRequest) => ipcRenderer.invoke(IpcChannel.TerminalStart, req),
   terminalInput: (data: string) => ipcRenderer.send(IpcChannel.TerminalInput, data),
