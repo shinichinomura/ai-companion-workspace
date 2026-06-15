@@ -365,12 +365,14 @@ body {
   inset: -3px 0;
 }
 
-/* Markdown の Edit / Preview 切替トグル */
+/* Markdown の Edit / Preview 切替トグル（2 ボタン連結のセグメントコントロール風） */
 .view-toggle {
   margin-left: 10px;
   display: inline-flex;
-  gap: 2px;
   vertical-align: middle;
+  /* 角丸を子ボタンのはみ出しでつぶさないようにする。 */
+  border-radius: 4px;
+  overflow: hidden;
 }
 
 .view-toggle-btn {
@@ -380,9 +382,15 @@ body {
   color: var(--fg-dim);
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  /* 個々の角丸は持たせず、隣接する枠線を 1 本に共有する。 */
+  border-radius: 0;
   padding: 1px 7px;
   cursor: pointer;
+}
+
+/* 隣り合うボタンの境界線が二重にならないよう左側を詰める。 */
+.view-toggle-btn + .view-toggle-btn {
+  border-left: none;
 }
 
 .view-toggle-btn:hover {
@@ -393,6 +401,11 @@ body {
   color: #fff;
   background: var(--accent);
   border-color: var(--accent);
+}
+
+/* active なボタンの直後のボタンは、共有していた左枠線を accent 色で補う。 */
+.view-toggle-btn.active + .view-toggle-btn {
+  border-left: 1px solid var(--accent);
 }
 
 /* Markdown プレビュー本体 */
