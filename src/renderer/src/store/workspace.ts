@@ -27,6 +27,33 @@ export function isDirty(file: OpenFile | null): boolean {
   return file != null && !file.isBinary && file.content !== file.savedContent
 }
 
+// ファイルを開く共通処理。
+// テキストは activeFile に展開してエディタ/プレビューに表示する。
+// バイナリ/巨大ファイルは OS の既定アプリ（関連付け）で開き、エディタの表示は変更しない。
+// 外部アプリで開けなかった場合のみ、従来どおりプレースホルダ表示にフォールバックする。
+async function openFileInternal(
+  relPath: string,
+  name: string,
+  set: (partial: Partial<WorkspaceState>) => void
+): Promise<void> {
+  const result = await window.api.readFile({ relPath })
+  if (result.isBinary) {
+    const error = await window.api.openPath({ relPath })
+    // 開けたらエディタは差し替えない（現在の表示を維持する）。
+    if (!error) return
+    // 失敗時（関連付けが無い等）はプレースホルダ表示に倒す。
+  }
+  set({
+    activeFile: {
+      relPath,
+      name,
+      content: result.content,
+      savedContent: result.content,
+      isBinary: result.isBinary
+    }
+  })
+}
+
 // openFolder / openFolderByPath の結果をストアに反映する共通処理。
 // 結果が null（キャンセル・開けないフォルダ）の場合は何もしない。
 async function applyOpenResult(
@@ -147,36 +174,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 
-  // ファイルを開いて中央ペインに表示する。
+  // ファイルを開いて中央ペインに表示する（バイナリは OS の既定アプリで開く）。
   openFile: async (node: FileNode) => {
     if (node.isDirectory) return
-    const result = await window.api.readFile({ relPath: node.relPath })
-    set({
-      activeFile: {
-        relPath: node.relPath,
-        name: node.name,
-        content: result.content,
-        savedContent: result.content,
-        isBinary: result.isBinary
-      }
-    })
+    await openFileInternal(node.relPath, node.name, set)
   },
 
   // project root 相対パスを指定してファイルを開く。
-  // explorer の openFile と同じく activeFile を差し替えるだけにし、挙動を揃える。
+  // explorer の openFile と同じ共通処理を使い、挙動を揃える。
   openFileByRelPath: async (relPath: string) => {
     try {
-      const result = await window.api.readFile({ relPath })
       const name = relPath.slice(relPath.lastIndexOf('/') + 1)
-      set({
-        activeFile: {
-          relPath,
-          name,
-          content: result.content,
-          savedContent: result.content,
-          isBinary: result.isBinary
-        }
-      })
+      await openFileInternal(relPath, name, set)
     } catch {
       // 読めない（存在しない・ディレクトリ・root 外を main が拒否）場合は何もしない。
     }

@@ -4,6 +4,7 @@ import {
   IpcChannel,
   type FsEventBatch,
   type OpenFolderByPathRequest,
+  type OpenPathRequest,
   type ReadDirRequest,
   type ReadFileRequest,
   type TerminalExit,
@@ -23,6 +24,7 @@ const api: WorkspaceApi = {
   readDir: (req: ReadDirRequest) => ipcRenderer.invoke(IpcChannel.ReadDir, req),
   readFile: (req: ReadFileRequest) => ipcRenderer.invoke(IpcChannel.ReadFile, req),
   writeFile: (req: WriteFileRequest) => ipcRenderer.invoke(IpcChannel.WriteFile, req),
+  openPath: (req: OpenPathRequest) => ipcRenderer.invoke(IpcChannel.OpenPath, req),
   onFsEvent: (cb: (batch: FsEventBatch) => void) => {
     const listener = (_e: unknown, batch: FsEventBatch): void => cb(batch)
     ipcRenderer.on(IpcChannel.FsEvent, listener)

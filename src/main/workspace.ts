@@ -1,4 +1,4 @@
-import { dialog, ipcMain, protocol, BrowserWindow, type WebContents } from 'electron'
+import { dialog, ipcMain, shell, protocol, BrowserWindow, type WebContents } from 'electron'
 import { promises as fs } from 'fs'
 import { basename, extname, join, normalize, relative, sep } from 'path'
 import chokidar, { type FSWatcher } from 'chokidar'
@@ -15,7 +15,8 @@ import {
   type ReadFileRequest,
   type ReadFileResult,
   type WriteFileRequest,
-  type WriteFileResult
+  type WriteFileResult,
+  type OpenPathRequest
 } from '../shared/ipc'
 import { addRecentFolder, loadRecentFolders, removeRecentFolder } from './settings'
 
@@ -279,6 +280,18 @@ export function registerMediaProtocol(): void {
   protocol.handle(MEDIA_SCHEME, handleMediaRequest)
 }
 
+// 指定ファイルを OS の既定アプリ（関連付け）で開く。バイナリ/巨大ファイル用。
+// project root 外は resolveWithinRoot が拒否する。ディレクトリは対象外。
+// 戻り値は shell.openPath のエラーメッセージ（成功時は空文字）。
+async function handleOpenPath(_e: unknown, req: OpenPathRequest): Promise<string> {
+  const abs = resolveWithinRoot(req.relPath)
+  const stat = await fs.stat(abs)
+  if (!stat.isFile()) {
+    return `ファイルではありません: ${req.relPath}`
+  }
+  return shell.openPath(abs)
+}
+
 // workspace 関連の IPC ハンドラを登録する。app 起動後に 1 度だけ呼ぶ。
 export function registerWorkspaceHandlers(): void {
   ipcMain.handle(IpcChannel.OpenFolder, handleOpenFolder)
@@ -287,6 +300,7 @@ export function registerWorkspaceHandlers(): void {
   ipcMain.handle(IpcChannel.ReadDir, handleReadDir)
   ipcMain.handle(IpcChannel.ReadFile, handleReadFile)
   ipcMain.handle(IpcChannel.WriteFile, handleWriteFile)
+  ipcMain.handle(IpcChannel.OpenPath, handleOpenPath)
 }
 
 // アプリ終了時などに watcher を後始末する。

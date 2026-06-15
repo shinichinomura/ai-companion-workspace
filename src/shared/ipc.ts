@@ -10,6 +10,8 @@ export const IpcChannel = {
   ReadDir: 'workspace:read-dir',
   ReadFile: 'workspace:read-file',
   WriteFile: 'workspace:write-file',
+  // バイナリ/巨大ファイルを OS の既定アプリ（関連付け）で開く。
+  OpenPath: 'workspace:open-path',
   // main → renderer への push。file watcher が検知した変更を通知する。
   FsEvent: 'workspace:fs-event',
 
@@ -94,6 +96,11 @@ export interface WriteFileResult {
   relPath: string
 }
 
+// openPath のリクエスト。relPath は project root からの相対パス。
+export interface OpenPathRequest {
+  relPath: string
+}
+
 // file watcher が検知した 1 件の変更。relPath は project root からの相対パス（'/' 区切り）。
 export type FsChangeKind = 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir'
 
@@ -140,6 +147,8 @@ export interface WorkspaceApi {
   readDir: (req: ReadDirRequest) => Promise<FileNode[]>
   readFile: (req: ReadFileRequest) => Promise<ReadFileResult>
   writeFile: (req: WriteFileRequest) => Promise<WriteFileResult>
+  // バイナリ/巨大ファイルを OS の既定アプリで開く。戻り値は失敗時のエラーメッセージ（成功時は空文字）。
+  openPath: (req: OpenPathRequest) => Promise<string>
   // file watcher の変更通知を購読する。返り値は購読解除関数。
   onFsEvent: (cb: (batch: FsEventBatch) => void) => () => void
 
