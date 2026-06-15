@@ -120,6 +120,37 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/* 定型プロンプトのボタン群。タイトルを左に寄せ、ボタン群とトグルを右側にまとめる。 */
+.terminal-actions {
+  margin-left: auto;
+  margin-right: 6px;
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* よく使う Git 操作を Claude に送るボタン。view-toggle-btn に準じた控えめな見た目。 */
+.terminal-action-btn {
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fg-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+
+.terminal-action-btn:hover:not(:disabled) {
+  color: var(--fg);
+  background: #333;
+}
+
+.terminal-action-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* 開閉トグルのアイコンボタン。 */
 .terminal-toggle {
   display: flex;
