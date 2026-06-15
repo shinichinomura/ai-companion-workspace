@@ -1,4 +1,4 @@
-import { Menu, BrowserWindow, ipcMain, type MenuItemConstructorOptions } from 'electron'
+import { app, Menu, BrowserWindow, ipcMain, type MenuItemConstructorOptions } from 'electron'
 import { IpcChannel, type WorkLayout } from '../shared/ipc'
 
 // メニューに保持する現在のレイアウト（チェック状態の初期値）。
@@ -30,14 +30,44 @@ function requestOpenFolder(): void {
   win?.webContents.send(IpcChannel.RequestOpenFolder)
 }
 
+// 「設定…」が選ばれたら renderer に通知する。設定モーダルは renderer 側で開く。
+function openSettings(): void {
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  win?.webContents.send(IpcChannel.OpenSettings)
+}
+
 // アプリケーションメニュー（ネイティブのメニューバー）を構築・適用する。
 // 「表示」メニューにエディタ/ターミナルの並べ方トグルを置く。
 export function buildAppMenu(): void {
   const isMac = process.platform === 'darwin'
 
   const template: MenuItemConstructorOptions[] = [
-    // macOS のアプリメニュー（Atelier について / 終了 など）。
-    ...(isMac ? [{ role: 'appMenu' as const }] : []),
+    // macOS のアプリメニュー（Atelier について / 設定… / 終了 など）。
+    // 「設定…」（⌘,）を挟むため role:'appMenu' を使わず手組みする。
+    ...(isMac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' as const },
+              { type: 'separator' as const },
+              {
+                label: '設定…',
+                accelerator: 'CmdOrCtrl+,',
+                click: () => openSettings()
+              },
+              { type: 'separator' as const },
+              { role: 'services' as const },
+              { type: 'separator' as const },
+              { role: 'hide' as const },
+              { role: 'hideOthers' as const },
+              { role: 'unhide' as const },
+              { type: 'separator' as const },
+              { role: 'quit' as const }
+            ]
+          }
+        ]
+      : []),
     {
       label: 'ファイル',
       submenu: [
@@ -47,6 +77,13 @@ export function buildAppMenu(): void {
           click: () => requestOpenFolder()
         },
         { type: 'separator' },
+        // 非 Mac ではアプリメニューが無いため、設定をファイルメニューに置く。
+        ...(!isMac
+          ? [
+              { label: '設定…', accelerator: 'CmdOrCtrl+,', click: () => openSettings() },
+              { type: 'separator' as const }
+            ]
+          : []),
         isMac ? { role: 'close' } : { role: 'quit' }
       ]
     },

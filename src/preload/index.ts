@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import {
   IpcChannel,
+  type AppSettings,
   type FsEventBatch,
   type OpenFolderByPathRequest,
   type OpenPathRequest,
@@ -56,6 +57,13 @@ const api: WorkspaceApi = {
     ipcRenderer.on(IpcChannel.RequestOpenFolder, listener)
     return () => ipcRenderer.removeListener(IpcChannel.RequestOpenFolder, listener)
   },
+  onOpenSettings: (cb: () => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IpcChannel.OpenSettings, listener)
+    return () => ipcRenderer.removeListener(IpcChannel.OpenSettings, listener)
+  },
+  getAppSettings: () => ipcRenderer.invoke(IpcChannel.SettingsGet),
+  setAppSettings: (settings: AppSettings) => ipcRenderer.invoke(IpcChannel.SettingsSet, settings),
 
   terminalStart: (req: TerminalStartRequest) => ipcRenderer.invoke(IpcChannel.TerminalStart, req),
   terminalInput: (data: string) => ipcRenderer.send(IpcChannel.TerminalInput, data),

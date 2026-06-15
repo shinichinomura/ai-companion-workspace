@@ -9,6 +9,7 @@ import {
 } from './workspace'
 import { registerTerminalHandlers, disposeTerminal } from './terminal'
 import { registerGitHandlers } from './git'
+import { registerAppSettingsHandlers } from './app-settings'
 import { buildAppMenu, registerMenuHandlers } from './menu'
 import { MEDIA_SCHEME } from '../shared/ipc'
 
@@ -95,6 +96,8 @@ app.whenReady().then(() => {
   registerTerminalHandlers()
   // Git status 取得の IPC ハンドラを登録する。
   registerGitHandlers()
+  // アプリ設定（設定画面）の取得・保存 IPC を登録する。
+  registerAppSettingsHandlers()
   // 表示メニューのレイアウト連携 IPC を登録し、アプリメニューを構築する。
   registerMenuHandlers()
   buildAppMenu()

@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useWorkspaceStore } from '../store/workspace'
+import { useSettingsStore } from '../store/settings'
 
 interface TerminalPaneProps {
   // 折りたたみ中か。ヘッダーバーのアイコン向きと本体の表示/非表示に使う。
@@ -11,42 +12,16 @@ interface TerminalPaneProps {
   onToggle: () => void
 }
 
-// よく使う Git 操作を、ボタン1つで統合ターミナルの Claude に送るための定型プロンプト。
-// 注意: 送信先はあくまでユーザーが見ている統合ターミナル。Claude が対話モードで
-// 起動している前提のショートカットで、裏でプロンプトを投入するものではない（spec 設計原則）。
-interface QuickPrompt {
-  // ボタンに表示するラベル。
-  label: string
-  // ホバー時の説明。実際に何を送るかを明示する。
-  title: string
-  // PTY に書き込むプロンプト本文（末尾の改行はここには含めない）。
-  prompt: string
-}
-
-const QUICK_PROMPTS: QuickPrompt[] = [
-  {
-    label: 'コミット',
-    title: '変更内容を確認してコミットするよう Claude に依頼します',
-    prompt: '変更内容を確認して、適切な粒度でコミットして'
-  },
-  {
-    label: 'プッシュ',
-    title: 'リモート（origin）と同期するよう Claude に依頼します',
-    prompt: 'リモート（origin）と同期して。必要なら pull してから push して'
-  },
-  {
-    label: 'コミット&プッシュ',
-    title: '変更をコミットしてから origin と同期するよう Claude に依頼します',
-    prompt: '変更内容を確認して適切な粒度でコミットし、その後 origin と同期（必要なら pull してから push）して'
-  }
-]
-
 // 右ペイン: 統合ターミナル（spec 2.2.4）。
 // xterm.js（renderer）と node-pty（main）を IPC で接続する。
 // MVP は単一インスタンス。フォルダ未選択時は起動せず、root が変わったら再起動する。
 function TerminalPane({ collapsed, onToggle }: TerminalPaneProps): JSX.Element {
   // project root。変化したらターミナルを張り替える（cwd を新 root にする）。
   const root = useWorkspaceStore((s) => s.root)
+  // よく使う Git 操作のボタン定義（設定画面で編集可能）。押すと prompt を統合ターミナルに送る。
+  // 送信先はユーザーが見ている統合ターミナル。Claude が対話モードで起動している前提の
+  // ショートカットで、裏でプロンプトを投入するものではない（spec 設計原則）。
+  const quickPrompts = useSettingsStore((s) => s.quickPrompts)
   const containerRef = useRef<HTMLDivElement>(null)
   // 折りたたみから復帰したときにサイズを測り直すため、fit/term を保持する。
   const fitRef = useRef<FitAddon | null>(null)
@@ -154,20 +129,23 @@ function TerminalPane({ collapsed, onToggle }: TerminalPaneProps): JSX.Element {
       {/* 開閉バー。折りたたんでもこのバーだけは残る。 */}
       <div className="terminal-header">
         <span>Terminal</span>
-        {/* よく使う Git 操作を Claude に送る定型プロンプトのボタン群。 */}
+        {/* よく使う Git 操作を Claude に送る定型プロンプトのボタン群（設定画面で編集可能）。
+            ラベルが空の行は表示しない。 */}
         <div className="terminal-actions">
-          {QUICK_PROMPTS.map((q) => (
-            <button
-              key={q.label}
-              type="button"
-              className="terminal-action-btn"
-              onClick={() => sendPrompt(q.prompt)}
-              disabled={!root}
-              title={q.title}
-            >
-              {q.label}
-            </button>
-          ))}
+          {quickPrompts
+            .filter((q) => q.label.trim())
+            .map((q) => (
+              <button
+                key={q.id}
+                type="button"
+                className="terminal-action-btn"
+                onClick={() => sendPrompt(q.prompt)}
+                disabled={!root || !q.prompt.trim()}
+                title={q.prompt}
+              >
+                {q.label}
+              </button>
+            ))}
         </div>
         <button
           type="button"

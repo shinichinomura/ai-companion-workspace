@@ -4,7 +4,9 @@ import type { ImperativePanelHandle } from 'react-resizable-panels'
 import FileExplorer from './components/FileExplorer'
 import EditorPane from './components/EditorPane'
 import TerminalPane from './components/TerminalPane'
+import SettingsModal from './components/SettingsModal'
 import { useWorkspaceStore } from './store/workspace'
+import { useSettingsStore } from './store/settings'
 import type { WorkLayout } from '../../shared/ipc'
 
 const LAYOUT_STORAGE_KEY = 'work-layout'
@@ -26,6 +28,10 @@ function App(): JSX.Element {
   const openFolder = useWorkspaceStore((s) => s.openFolder)
   const setShowHidden = useWorkspaceStore((s) => s.setShowHidden)
   const refreshGitStatus = useWorkspaceStore((s) => s.refreshGitStatus)
+  const loadSettings = useSettingsStore((s) => s.load)
+
+  // 設定モーダルの表示状態。アプリメニューの「設定…」で開く。
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // Editor / Terminal の並べ方。ネイティブの「表示」メニューで切り替え、localStorage に保存する。
   const [layout, setLayout] = useState<WorkLayout>(loadLayout)
@@ -116,6 +122,17 @@ function App(): JSX.Element {
     return unsubscribe
   }, [refreshGitStatus])
 
+  // 起動時にアプリ設定を読み込む（クイック操作のボタン定義など）。
+  useEffect(() => {
+    void loadSettings()
+  }, [loadSettings])
+
+  // アプリメニューの「設定…」を購読し、設定モーダルを開く。
+  useEffect(() => {
+    const unsubscribe = window.api.onOpenSettings(() => setSettingsOpen(true))
+    return unsubscribe
+  }, [])
+
   // 起動時に前回フォルダを自動で開き直す（spec 4.2 最近開いたフォルダの保存）。
   useEffect(() => {
     void restoreLastFolder()
@@ -167,6 +184,7 @@ function App(): JSX.Element {
           </div>
         </Panel>
       </PanelGroup>
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

@@ -30,6 +30,12 @@ export const IpcChannel = {
   ShowHiddenChanged: 'view:show-hidden-changed',
   // M→R push: 「ファイル」メニューの「フォルダを開く」が選ばれた。
   RequestOpenFolder: 'view:request-open-folder',
+  // M→R push: アプリメニューの「設定…」が選ばれた。renderer は設定モーダルを開く。
+  OpenSettings: 'view:open-settings',
+
+  // アプリ設定（設定画面）。userData の app-settings.json に永続化する。
+  SettingsGet: 'settings:get', // R→M invoke: 現在のアプリ設定を取得する
+  SettingsSet: 'settings:set', // R→M invoke: アプリ設定を保存し、正規化後の値を返す
 
   // 統合ターミナル（spec 2.2.4）。MVP は単一インスタンス。
   TerminalStart: 'terminal:start', // R→M invoke: cwd(project root) で PTY 起動
@@ -59,6 +65,47 @@ export function mediaUrl(relPath: string): string {
 
 // Editor と Terminal の並べ方。'horizontal' = 左右, 'vertical' = 上下。
 export type WorkLayout = 'horizontal' | 'vertical'
+
+// ターミナルのクイック操作（ヘッダのボタン）。押すと prompt を統合ターミナルに送る。
+// id は React の key と保存後の識別に使う安定 ID。
+export interface QuickPrompt {
+  id: string
+  // ボタンに表示するラベル。
+  label: string
+  // ボタンを押したときに統合ターミナルへ送るメッセージ（末尾の改行は送信側で付ける）。
+  prompt: string
+}
+
+// アプリ全体の設定（設定画面で編集する）。項目はここに追加していく。
+// main 側で読み込み時にデフォルト補完するため、項目を増やしても後方互換を保てる。
+export interface AppSettings {
+  quickPrompts: QuickPrompt[]
+}
+
+// クイック操作の初期値。main の正規化と renderer のフォールバックで共有する。
+export const DEFAULT_QUICK_PROMPTS: QuickPrompt[] = [
+  {
+    id: 'commit',
+    label: 'コミット',
+    prompt: '変更内容を確認して、適切な粒度でコミットして'
+  },
+  {
+    id: 'push',
+    label: 'プッシュ',
+    prompt: 'リモート（origin）と同期して。必要なら pull してから push して'
+  },
+  {
+    id: 'commit-push',
+    label: 'コミット&プッシュ',
+    prompt:
+      '変更内容を確認して適切な粒度でコミットし、その後 origin と同期（必要なら pull してから push）して'
+  }
+]
+
+// アプリ設定の初期値。
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  quickPrompts: DEFAULT_QUICK_PROMPTS
+}
 
 // ファイルツリーの 1 ノード。ディレクトリは遅延展開するため children は持たない。
 export interface FileNode {
@@ -190,6 +237,13 @@ export interface WorkspaceApi {
   reportShowHidden: (show: boolean) => void
   // 「ファイル」メニューの「フォルダを開く」を購読する。返り値は購読解除関数。
   onRequestOpenFolder: (cb: () => void) => () => void
+  // 「設定…」メニューが選ばれたら通知を受ける。返り値は購読解除関数。
+  onOpenSettings: (cb: () => void) => () => void
+
+  // 現在のアプリ設定を取得する。
+  getAppSettings: () => Promise<AppSettings>
+  // アプリ設定を保存する。main 側で正規化した結果を返す。
+  setAppSettings: (settings: AppSettings) => Promise<AppSettings>
 
   // 統合ターミナル。project root を cwd に PTY を起動する。
   terminalStart: (req: TerminalStartRequest) => Promise<TerminalStartResult>
