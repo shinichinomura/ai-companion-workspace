@@ -23,6 +23,7 @@ function loadLayout(): WorkLayout {
 function App(): JSX.Element {
   const applyFsChanges = useWorkspaceStore((s) => s.applyFsChanges)
   const restoreLastFolder = useWorkspaceStore((s) => s.restoreLastFolder)
+  const openFolder = useWorkspaceStore((s) => s.openFolder)
 
   // Editor / Terminal の並べ方。ネイティブの「表示」メニューで切り替え、localStorage に保存する。
   const [layout, setLayout] = useState<WorkLayout>(loadLayout)
@@ -78,6 +79,14 @@ function App(): JSX.Element {
     })
     return unsubscribe
   }, [])
+
+  // 「ファイル」メニューの「フォルダを開く」を購読し、フォルダ選択を開く。
+  useEffect(() => {
+    const unsubscribe = window.api.onRequestOpenFolder(() => {
+      void openFolder()
+    })
+    return unsubscribe
+  }, [openFolder])
 
   // file watcher の変更通知を購読し、ツリー / エディタに反映する（spec 2.2.5）。
   useEffect(() => {

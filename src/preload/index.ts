@@ -39,6 +39,11 @@ const api: WorkspaceApi = {
   },
   reportWorkLayout: (layout: WorkLayout) =>
     ipcRenderer.send(IpcChannel.WorkLayoutChanged, layout),
+  onRequestOpenFolder: (cb: () => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IpcChannel.RequestOpenFolder, listener)
+    return () => ipcRenderer.removeListener(IpcChannel.RequestOpenFolder, listener)
+  },
 
   terminalStart: (req: TerminalStartRequest) => ipcRenderer.invoke(IpcChannel.TerminalStart, req),
   terminalInput: (data: string) => ipcRenderer.send(IpcChannel.TerminalInput, data),

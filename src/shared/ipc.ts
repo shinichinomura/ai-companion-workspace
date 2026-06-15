@@ -20,6 +20,8 @@ export const IpcChannel = {
   SetWorkLayout: 'view:set-work-layout',
   // R→M send: renderer の現在レイアウトを通知し、メニューのチェック状態を同期する。
   WorkLayoutChanged: 'view:work-layout-changed',
+  // M→R push: 「ファイル」メニューの「フォルダを開く」が選ばれた。
+  RequestOpenFolder: 'view:request-open-folder',
 
   // 統合ターミナル（spec 2.2.4）。MVP は単一インスタンス。
   TerminalStart: 'terminal:start', // R→M invoke: cwd(project root) で PTY 起動
@@ -156,6 +158,8 @@ export interface WorkspaceApi {
   onSetWorkLayout: (cb: (layout: WorkLayout) => void) => () => void
   // 現在のレイアウトを main に通知し、メニューのチェック状態を同期する。
   reportWorkLayout: (layout: WorkLayout) => void
+  // 「ファイル」メニューの「フォルダを開く」を購読する。返り値は購読解除関数。
+  onRequestOpenFolder: (cb: () => void) => () => void
 
   // 統合ターミナル。project root を cwd に PTY を起動する。
   terminalStart: (req: TerminalStartRequest) => Promise<TerminalStartResult>

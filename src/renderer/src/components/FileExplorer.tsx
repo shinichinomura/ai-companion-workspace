@@ -79,15 +79,11 @@ function RecentFolders(): JSX.Element {
 function FileExplorer(): JSX.Element {
   const rootName = useWorkspaceStore((s) => s.rootName)
   const rootChildren = useWorkspaceStore((s) => s.childrenByDir[''])
-  const openFolder = useWorkspaceStore((s) => s.openFolder)
 
   return (
     <div className="pane-inner">
       <div className="pane-header explorer-header">
         <span className="explorer-title">{rootName ?? 'Explorer'}</span>
-        <button className="btn" onClick={() => void openFolder()}>
-          {rootName ? '別のフォルダ' : 'フォルダを開く'}
-        </button>
       </div>
       <div className="pane-body tree">
         {rootChildren ? (

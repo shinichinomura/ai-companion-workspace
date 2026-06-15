@@ -12,6 +12,13 @@ function requestLayout(layout: WorkLayout): void {
   win?.webContents.send(IpcChannel.SetWorkLayout, layout)
 }
 
+// 「ファイル」メニューの「フォルダを開く」が選ばれたら renderer に通知する。
+// 実際のフォルダ選択ダイアログは renderer（既存の openFolder フロー）が開く。
+function requestOpenFolder(): void {
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  win?.webContents.send(IpcChannel.RequestOpenFolder)
+}
+
 // アプリケーションメニュー（ネイティブのメニューバー）を構築・適用する。
 // 「表示」メニューにエディタ/ターミナルの並べ方トグルを置く。
 export function buildAppMenu(): void {
@@ -20,7 +27,18 @@ export function buildAppMenu(): void {
   const template: MenuItemConstructorOptions[] = [
     // macOS のアプリメニュー（Atelier について / 終了 など）。
     ...(isMac ? [{ role: 'appMenu' as const }] : []),
-    { role: 'fileMenu' },
+    {
+      label: 'ファイル',
+      submenu: [
+        {
+          label: 'フォルダを開く',
+          accelerator: 'CmdOrCtrl+O',
+          click: () => requestOpenFolder()
+        },
+        { type: 'separator' },
+        isMac ? { role: 'close' } : { role: 'quit' }
+      ]
+    },
     { role: 'editMenu' },
     {
       label: '表示',
