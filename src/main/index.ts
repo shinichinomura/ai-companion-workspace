@@ -1,4 +1,5 @@
 import { app, shell, BrowserWindow, protocol } from 'electron'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import {
@@ -69,6 +70,17 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.nomura.atelier')
+
+  // 開発(HMR)では electron-vite が Electron を直接起動するため、パッケージ版の
+  // build/icon.icns が Dock に反映されず素の Electron アイコンが出てしまう。
+  // 試用版と同じ見た目にするため、dev のときだけ加工済みマスター PNG を Dock にセットする。
+  // 判定は他の dev 分岐と同様に ELECTRON_RENDERER_URL の有無で行う。
+  if (process.env['ELECTRON_RENDERER_URL'] && process.platform === 'darwin' && app.dock) {
+    const devIconPath = join(app.getAppPath(), 'design/app-icon/master-1024.png')
+    if (existsSync(devIconPath)) {
+      app.dock.setIcon(devIconPath)
+    }
+  }
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
