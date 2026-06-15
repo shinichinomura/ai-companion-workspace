@@ -5,6 +5,7 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
 import remarkRehype from 'remark-rehype'
+import rehypeRaw from 'rehype-raw'
 import rehypeSlug from 'rehype-slug'
 import rehypeSanitize from 'rehype-sanitize'
 import rehypeStringify from 'rehype-stringify'
@@ -82,12 +83,16 @@ function rehypeResolveMedia() {
 const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
-  // allowDangerousHtml は付けない。Markdown 中の生 HTML はここで落とす。
-  .use(remarkRehype)
+  // 生 HTML（`<img width=...>` 等）を raw ノードとして残し、後段の rehype-raw でパースする。
+  // 生成物の写真一覧（farming の index.md 等）は Markdown ではなく生 HTML の img を使うため対応する。
+  .use(remarkRehype, { allowDangerousHtml: true })
+  // 生 HTML を実際の HAST 要素へパースする。安全性はこの後の rehype-sanitize で担保する。
+  .use(rehypeRaw)
   // 見出しに id（スラッグ）を付与し、`[目次](#section)` のようなアンカーリンクを成立させる。
   // sanitize より前に実行する（生成された id は sanitize 側で user-content- が付与される）。
   .use(rehypeSlug)
-  // デフォルトスキーマ（GitHub 相当）でサニタイズする。
+  // デフォルトスキーマ（GitHub 相当）でサニタイズする。raw HTML 由来の要素もここで無害化し、
+  // 任意スクリプトや許可外タグ・属性を落とす（`<img>`/`<a>`/width 等は許可される）。
   // 見出しの id は user-content- プレフィックス付きで保持される（DOM clobbering 対策）。
   .use(rehypeSanitize)
   // sanitize 後に、相対パス画像をアプリ内配信用のカスタムスキーム URL へ書き換える。
