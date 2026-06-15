@@ -5,11 +5,22 @@ import { IpcChannel, type WorkLayout } from '../shared/ipc'
 // 実体の真値は renderer 側（localStorage）。起動時に renderer から通知されて同期される。
 let currentLayout: WorkLayout = 'horizontal'
 
+// 隠しファイル（. で始まるファイル）を表示するか。
+// 実体の真値は renderer 側（localStorage）。起動時に renderer から通知されて同期される。
+let currentShowHidden = false
+
 // 表示メニューでレイアウトが選ばれたら renderer に通知する。
 function requestLayout(layout: WorkLayout): void {
   currentLayout = layout
   const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
   win?.webContents.send(IpcChannel.SetWorkLayout, layout)
+}
+
+// 表示メニューで隠しファイルの表示が切り替えられたら renderer に通知する。
+function requestShowHidden(show: boolean): void {
+  currentShowHidden = show
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  win?.webContents.send(IpcChannel.SetShowHidden, show)
 }
 
 // 「ファイル」メニューの「フォルダを開く」が選ばれたら renderer に通知する。
@@ -58,6 +69,14 @@ export function buildAppMenu(): void {
           click: () => requestLayout('vertical')
         },
         { type: 'separator' },
+        {
+          id: 'show-hidden',
+          label: '. で始まるファイルを表示',
+          type: 'checkbox',
+          checked: currentShowHidden,
+          click: (menuItem) => requestShowHidden(menuItem.checked)
+        },
+        { type: 'separator' },
         { role: 'reload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
@@ -85,5 +104,12 @@ export function registerMenuHandlers(): void {
       layout === 'vertical' ? 'layout-vertical' : 'layout-horizontal'
     )
     if (item) item.checked = true
+  })
+
+  // renderer の現在の隠しファイル表示状態を受けて、メニューのチェック状態を同期する。
+  ipcMain.on(IpcChannel.ShowHiddenChanged, (_e, show: boolean) => {
+    currentShowHidden = show
+    const item = Menu.getApplicationMenu()?.getMenuItemById('show-hidden')
+    if (item) item.checked = show
   })
 }

@@ -24,6 +24,7 @@ function App(): JSX.Element {
   const applyFsChanges = useWorkspaceStore((s) => s.applyFsChanges)
   const restoreLastFolder = useWorkspaceStore((s) => s.restoreLastFolder)
   const openFolder = useWorkspaceStore((s) => s.openFolder)
+  const setShowHidden = useWorkspaceStore((s) => s.setShowHidden)
 
   // Editor / Terminal の並べ方。ネイティブの「表示」メニューで切り替え、localStorage に保存する。
   const [layout, setLayout] = useState<WorkLayout>(loadLayout)
@@ -79,6 +80,16 @@ function App(): JSX.Element {
     })
     return unsubscribe
   }, [])
+
+  // 「表示」メニューの隠しファイル表示トグルを購読し、状態と localStorage に反映する。
+  // マウント時に現在の設定を main へ通知してメニューのチェックを同期する。
+  useEffect(() => {
+    window.api.reportShowHidden(useWorkspaceStore.getState().showHidden)
+    const unsubscribe = window.api.onSetShowHidden((show) => {
+      setShowHidden(show)
+    })
+    return unsubscribe
+  }, [setShowHidden])
 
   // 「ファイル」メニューの「フォルダを開く」を購読し、フォルダ選択を開く。
   useEffect(() => {

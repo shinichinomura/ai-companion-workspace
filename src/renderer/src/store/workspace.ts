@@ -22,6 +22,14 @@ function parentDir(relPath: string): string {
   return idx === -1 ? '' : relPath.slice(0, idx)
 }
 
+// 隠しファイル（. で始まる名前）の表示設定の localStorage キー。
+const SHOW_HIDDEN_STORAGE_KEY = 'show-hidden'
+
+// localStorage から隠しファイル表示設定を復元する（既定は非表示）。
+function loadShowHidden(): boolean {
+  return localStorage.getItem(SHOW_HIDDEN_STORAGE_KEY) === 'true'
+}
+
 // 未保存変更があるか。content と savedContent の差分で判定する。
 export function isDirty(file: OpenFile | null): boolean {
   return file != null && !file.isBinary && file.content !== file.savedContent
@@ -87,6 +95,9 @@ interface WorkspaceState {
   // 最近開いたフォルダの絶対パス一覧（新しい順）。
   recentFolders: string[]
 
+  // 隠しファイル（. で始まる名前）をツリーに表示するか。
+  showHidden: boolean
+
   // 操作。
   openFolder: () => Promise<void>
   // 最近開いた一覧を main から取得して反映する。
@@ -110,6 +121,8 @@ interface WorkspaceState {
   reloadActiveFromDisk: () => Promise<void>
   // 外部変更の衝突通知を閉じる（自分の編集を保持する）。
   dismissExternalChange: () => void
+  // 隠しファイルの表示設定を切り替える（localStorage にも保存する）。
+  setShowHidden: (show: boolean) => void
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -119,6 +132,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   expandedDirs: new Set(),
   activeFile: null,
   recentFolders: [],
+  showHidden: loadShowHidden(),
 
   // フォルダを開き、ルート直下を読み込む。
   openFolder: async () => {
@@ -317,5 +331,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const active = get().activeFile
     if (!active) return
     set({ activeFile: { ...active, externallyChanged: false, externallyDeleted: false } })
+  },
+
+  // 隠しファイルの表示設定を切り替える。
+  setShowHidden: (show: boolean) => {
+    localStorage.setItem(SHOW_HIDDEN_STORAGE_KEY, show ? 'true' : 'false')
+    set({ showHidden: show })
   }
 }))

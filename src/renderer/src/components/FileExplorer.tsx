@@ -1,11 +1,17 @@
 import type { FileNode } from '../../../shared/ipc'
 import { useWorkspaceStore } from '../store/workspace'
 
+// 隠しファイル表示が off のとき、. で始まる名前のノードを除外する。
+function visibleNodes(nodes: FileNode[], showHidden: boolean): FileNode[] {
+  return showHidden ? nodes : nodes.filter((n) => !n.name.startsWith('.'))
+}
+
 // ツリーの 1 ノード。ディレクトリは展開状態に応じて子を再帰描画する。
 function TreeNode({ node, depth }: { node: FileNode; depth: number }): JSX.Element {
   const expandedDirs = useWorkspaceStore((s) => s.expandedDirs)
   const childrenByDir = useWorkspaceStore((s) => s.childrenByDir)
   const activeFile = useWorkspaceStore((s) => s.activeFile)
+  const showHidden = useWorkspaceStore((s) => s.showHidden)
   const toggleDir = useWorkspaceStore((s) => s.toggleDir)
   const openFile = useWorkspaceStore((s) => s.openFile)
 
@@ -36,7 +42,8 @@ function TreeNode({ node, depth }: { node: FileNode; depth: number }): JSX.Eleme
         <span className="tree-label">{node.name}</span>
       </div>
       {isExpanded &&
-        children?.map((child) => (
+        children &&
+        visibleNodes(children, showHidden).map((child) => (
           <TreeNode key={child.relPath} node={child} depth={depth + 1} />
         ))}
     </>
@@ -79,6 +86,7 @@ function RecentFolders(): JSX.Element {
 function FileExplorer(): JSX.Element {
   const rootName = useWorkspaceStore((s) => s.rootName)
   const rootChildren = useWorkspaceStore((s) => s.childrenByDir[''])
+  const showHidden = useWorkspaceStore((s) => s.showHidden)
 
   return (
     <div className="pane-inner">
@@ -87,7 +95,7 @@ function FileExplorer(): JSX.Element {
       </div>
       <div className="pane-body tree">
         {rootChildren ? (
-          rootChildren.map((node) => (
+          visibleNodes(rootChildren, showHidden).map((node) => (
             <TreeNode key={node.relPath} node={node} depth={0} />
           ))
         ) : (
