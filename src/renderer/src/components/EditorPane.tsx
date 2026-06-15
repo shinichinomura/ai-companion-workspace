@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useWorkspaceStore, isDirty } from '../store/workspace'
 import MonacoEditor from './MonacoEditor'
 import MarkdownPreview from './MarkdownPreview'
@@ -21,12 +21,8 @@ function EditorPane(): JSX.Element {
   const markdown = activeFile != null && !activeFile.isBinary && isMarkdown(activeFile.relPath)
 
   // Edit / Preview の表示状態。ストアに持たせずペイン内で管理する。
+  // 表示ファイルを切り替えてもモード選択は維持する。
   const [view, setView] = useState<'edit' | 'preview'>('edit')
-
-  // ファイルを切り替えたら Edit に戻す。
-  useEffect(() => {
-    setView('edit')
-  }, [activeFile?.relPath])
 
   return (
     <div className="pane-inner">
