@@ -2,6 +2,10 @@
 :root {
   --bg: #1e1e1e;
   --bg-elev: #252526;
+  /* エディタ以外のペイン（エクスプローラー / ターミナル）の背景。
+     VSCode ダークテーマの sideBar.background に合わせ、エディタ背景(--bg)より
+     わずかに明るいグレーにして 3 ペインの境界を視認しやすくする。 */
+  --bg-pane: #252526;
   --border: #333;
   --fg: #d4d4d4;
   --fg-dim: #888;
@@ -103,6 +107,11 @@ body {
 .pane {
   height: 100%;
   background: var(--bg);
+}
+
+/* エディタ以外のペイン。背景をグレー寄りにして境界を見やすくする。 */
+.pane--soft {
+  background: var(--bg-pane);
 }
 
 .pane-inner {
@@ -224,7 +233,7 @@ body {
   min-height: 0;
   overflow: hidden;
   padding: 4px 0 4px 8px;
-  background: #1e1e1e;
+  background: var(--bg-pane);
 }
 
 .placeholder {

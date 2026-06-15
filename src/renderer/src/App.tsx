@@ -155,7 +155,7 @@ function App(): JSX.Element {
         <span className="titlebar-title">Atelier</span>
       </div>
       <PanelGroup direction="horizontal" autoSaveId="outer-layout">
-        <Panel defaultSize={20} minSize={12} className="pane">
+        <Panel defaultSize={20} minSize={12} className="pane pane--soft">
           <FileExplorer />
         </Panel>
         <PanelResizeHandle className="resize-handle" />
@@ -185,7 +185,7 @@ function App(): JSX.Element {
                   setTerminalCollapsed(false)
                   localStorage.setItem(TERMINAL_COLLAPSED_KEY, 'false')
                 }}
-                className="pane"
+                className="pane pane--soft"
               >
                 <TerminalPane
                   collapsed={terminalCollapsed}

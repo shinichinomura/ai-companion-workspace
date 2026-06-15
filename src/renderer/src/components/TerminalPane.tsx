@@ -39,8 +39,8 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
       cursorBlink: true,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       fontSize: 13,
-      // ペインの配色に合わせた最低限のテーマ。
-      theme: { background: '#1e1e1e', foreground: '#d4d4d4' }
+      // ペインの配色に合わせた最低限のテーマ。背景は CSS の --bg-pane(#252526) と揃える。
+      theme: { background: '#252526', foreground: '#d4d4d4' }
     })
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
