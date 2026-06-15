@@ -4,13 +4,23 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useWorkspaceStore } from '../store/workspace'
 
+interface TerminalPaneProps {
+  // 折りたたみ中か。ヘッダーバーのアイコン向きと本体の表示/非表示に使う。
+  collapsed: boolean
+  // ヘッダーの開閉アイコンから呼ぶトグル。
+  onToggle: () => void
+}
+
 // 右ペイン: 統合ターミナル（spec 2.2.4）。
 // xterm.js（renderer）と node-pty（main）を IPC で接続する。
 // MVP は単一インスタンス。フォルダ未選択時は起動せず、root が変わったら再起動する。
-function TerminalPane(): JSX.Element {
+function TerminalPane({ collapsed, onToggle }: TerminalPaneProps): JSX.Element {
   // project root。変化したらターミナルを張り替える（cwd を新 root にする）。
   const root = useWorkspaceStore((s) => s.root)
   const containerRef = useRef<HTMLDivElement>(null)
+  // 折りたたみから復帰したときにサイズを測り直すため、fit/term を保持する。
+  const fitRef = useRef<FitAddon | null>(null)
+  const termRef = useRef<Terminal | null>(null)
 
   useEffect(() => {
     // フォルダ未選択時はターミナルを起動しない。
@@ -27,6 +37,8 @@ function TerminalPane(): JSX.Element {
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
     term.open(containerRef.current)
+    fitRef.current = fitAddon
+    termRef.current = term
 
     // コンテナのサイズに合わせて端末サイズを確定する。
     // 初回はレイアウト確定後に測りたいため、サイズが取れるまで安全側に倒す。
@@ -77,17 +89,58 @@ function TerminalPane(): JSX.Element {
       // main 側の PTY も破棄する（root 切替・アンマウント時）。
       window.api.terminalDispose()
       term.dispose()
+      fitRef.current = null
+      termRef.current = null
     }
   }, [root])
 
+  // 折りたたみから表示に戻ったらサイズを測り直す（非表示中は 0 サイズなので fit がずれる）。
+  useEffect(() => {
+    if (collapsed) return
+    const id = requestAnimationFrame(() => {
+      try {
+        fitRef.current?.fit()
+        const t = termRef.current
+        if (t) window.api.terminalResize({ cols: t.cols, rows: t.rows })
+      } catch {
+        // サイズが取れないタイミングは無視する。
+      }
+    })
+    return () => cancelAnimationFrame(id)
+  }, [collapsed])
+
   return (
     <div className="pane-inner">
-      <div className="pane-header">Terminal</div>
-      {root ? (
-        <div ref={containerRef} className="terminal-body" />
-      ) : (
-        <div className="pane-body placeholder">フォルダを開くとターミナルが起動します</div>
-      )}
+      {/* 開閉バー。折りたたんでもこのバーだけは残る。 */}
+      <div className="terminal-header">
+        <span>Terminal</span>
+        <button
+          type="button"
+          className={`terminal-toggle${collapsed ? ' collapsed' : ''}`}
+          onClick={onToggle}
+          title={collapsed ? 'ターミナルを表示' : 'ターミナルを隠す'}
+          aria-label={collapsed ? 'ターミナルを表示' : 'ターミナルを隠す'}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path
+              d="M2.5 4.5 L6 8 L9.5 4.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
+      {/* 折りたたみ中は本体を display:none で隠す。xterm 自体はマウントしたままにして PTY を保持する。 */}
+      <div className="terminal-content" style={{ display: collapsed ? 'none' : undefined }}>
+        {root ? (
+          <div ref={containerRef} className="terminal-body" />
+        ) : (
+          <div className="pane-body placeholder">フォルダを開くとターミナルが起動します</div>
+        )}
+      </div>
     </div>
   )
 }

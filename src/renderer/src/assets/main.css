@@ -99,6 +99,60 @@ body {
   padding: 12px;
 }
 
+/* ターミナルの開閉バー。折りたたみ時もこのバーだけは残す。
+   高さは App.tsx の TERMINAL_HEADER_PX と一致させる。 */
+.terminal-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  padding: 0 4px 0 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-dim);
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+
+/* 開閉トグルのアイコンボタン。 */
+.terminal-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+.terminal-toggle:hover {
+  background: #333;
+  color: var(--fg);
+}
+
+.terminal-toggle svg {
+  transition: transform 0.15s;
+}
+
+/* 折りたたみ中はシェブロンを反転して「開く」向きにする。 */
+.terminal-toggle.collapsed svg {
+  transform: rotate(180deg);
+}
+
+/* ヘッダーの下の本体領域。折りたたみ時は display:none で隠す。 */
+.terminal-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* 統合ターミナル本体。xterm をペイン全体に広げる。 */
 .terminal-body {
   flex: 1 1 auto;
@@ -286,6 +340,11 @@ body {
   content: '';
   position: absolute;
   inset: 0 -3px;
+}
+
+/* ヘッダー相当 % を実測するためのラッパ。親 Panel を埋める。 */
+.work-area {
+  height: 100%;
 }
 
 /* Editor / Terminal をまとめる内側グループは親 Panel を埋める */

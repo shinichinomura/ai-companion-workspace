@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
+import type { ImperativePanelHandle } from 'react-resizable-panels'
 import FileExplorer from './components/FileExplorer'
 import EditorPane from './components/EditorPane'
 import TerminalPane from './components/TerminalPane'
@@ -7,6 +8,10 @@ import { useWorkspaceStore } from './store/workspace'
 import type { WorkLayout } from '../../shared/ipc'
 
 const LAYOUT_STORAGE_KEY = 'work-layout'
+const TERMINAL_COLLAPSED_KEY = 'terminal-collapsed'
+
+// 折りたたみ時に残すターミナルヘッダーバーの高さ（CSS の .terminal-header と合わせる）。
+const TERMINAL_HEADER_PX = 30
 
 // localStorage から初期レイアウトを復元する（不正値は左右にフォールバック）。
 function loadLayout(): WorkLayout {
@@ -21,6 +26,47 @@ function App(): JSX.Element {
 
   // Editor / Terminal の並べ方。ネイティブの「表示」メニューで切り替え、localStorage に保存する。
   const [layout, setLayout] = useState<WorkLayout>(loadLayout)
+
+  // ターミナルペインの折りたたみ状態。閉じてもヘッダーバーだけは残す。
+  // PTY を生かしたまま畳むため、Panel を collapsible にしてサイズだけを縮める（再マウントしない）。
+  const [terminalCollapsed, setTerminalCollapsed] = useState(
+    () => localStorage.getItem(TERMINAL_COLLAPSED_KEY) === 'true'
+  )
+  // 折りたたみ時の Panel サイズ（%）。ヘッダーバーの高さがレイアウト方向の実サイズに対して
+  // 何 % になるかを実測して求める。
+  const [collapsedSize, setCollapsedSize] = useState(6)
+  const terminalPanelRef = useRef<ImperativePanelHandle>(null)
+  const workRef = useRef<HTMLDivElement>(null)
+
+  // work エリアの実寸からヘッダーバー相当の % を算出する。レイアウト方向で測る軸を変える。
+  useEffect(() => {
+    const el = workRef.current
+    if (!el) return
+    const recompute = (): void => {
+      const rect = el.getBoundingClientRect()
+      const px = layout === 'vertical' ? rect.height : rect.width
+      if (px <= 0) return
+      setCollapsedSize(Math.min(50, Math.max(2, (TERMINAL_HEADER_PX / px) * 100)))
+    }
+    recompute()
+    const ro = new ResizeObserver(recompute)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [layout])
+
+  // collapsedSize が変わったとき（ウィンドウリサイズ・レイアウト切替）に、
+  // 折りたたみ中なら新しいサイズで畳み直してヘッダー高さを一定に保つ。
+  useEffect(() => {
+    if (terminalCollapsed) terminalPanelRef.current?.collapse()
+  }, [collapsedSize, terminalCollapsed])
+
+  // ヘッダーのアイコンから呼ぶ開閉トグル。
+  const toggleTerminal = (): void => {
+    const panel = terminalPanelRef.current
+    if (!panel) return
+    if (panel.isCollapsed()) panel.expand()
+    else panel.collapse()
+  }
 
   // 表示メニューからの切り替え通知を購読し、状態と localStorage に反映する。
   // マウント時に現在のレイアウトを main へ通知してメニューのチェックを同期する。
@@ -61,16 +107,35 @@ function App(): JSX.Element {
         <Panel defaultSize={80} minSize={30}>
           {/* Editor と Terminal は内側の PanelGroup でまとめ、方向だけを切り替える。
               key を付けて再マウントすると Terminal の PTY が破棄されてしまうため、
-              direction prop の変更だけで切り替える（v2 は再マウント不要。サイズは % で保持され方向を変えても崩れない）。 */}
-          <PanelGroup direction={layout} autoSaveId="work-layout" className="work-group">
-            <Panel defaultSize={60} minSize={20} className="pane">
-              <EditorPane />
-            </Panel>
-            <PanelResizeHandle className="resize-handle" />
-            <Panel defaultSize={40} minSize={15} className="pane">
-              <TerminalPane />
-            </Panel>
-          </PanelGroup>
+              direction prop の変更だけで切り替える（v2 は再マウント不要。サイズは % で保持され方向を変えても崩れない）。
+              ヘッダー相当 % を実測するため PanelGroup を div でラップして寸法を測る。 */}
+          <div className="work-area" ref={workRef}>
+            <PanelGroup direction={layout} autoSaveId="work-layout" className="work-group">
+              <Panel defaultSize={60} minSize={20} className="pane">
+                <EditorPane />
+              </Panel>
+              <PanelResizeHandle className="resize-handle" />
+              {/* collapsible にしてサイズを縮めるだけ。中身（PTY）はマウントしたまま保持する。 */}
+              <Panel
+                ref={terminalPanelRef}
+                defaultSize={40}
+                minSize={15}
+                collapsible
+                collapsedSize={collapsedSize}
+                onCollapse={() => {
+                  setTerminalCollapsed(true)
+                  localStorage.setItem(TERMINAL_COLLAPSED_KEY, 'true')
+                }}
+                onExpand={() => {
+                  setTerminalCollapsed(false)
+                  localStorage.setItem(TERMINAL_COLLAPSED_KEY, 'false')
+                }}
+                className="pane"
+              >
+                <TerminalPane collapsed={terminalCollapsed} onToggle={toggleTerminal} />
+              </Panel>
+            </PanelGroup>
+          </div>
         </Panel>
       </PanelGroup>
     </div>
