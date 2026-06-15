@@ -32,6 +32,8 @@ function MonacoEditor({ path, value, onChange, onSave }: MonacoEditorProps): JSX
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
+      // ペインの右端で折り返す（横スクロールを出さない）。
+      wordWrap: 'on',
       fontSize: 13,
       tabSize: 2
     })
