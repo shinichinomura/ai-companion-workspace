@@ -4,18 +4,21 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useWorkspaceStore } from '../store/workspace'
 import { useSettingsStore } from '../store/settings'
+import type { WorkLayout } from '../../../shared/ipc'
 
 interface TerminalPaneProps {
   // 折りたたみ中か。ヘッダーバーのアイコン向きと本体の表示/非表示に使う。
   collapsed: boolean
   // ヘッダーの開閉アイコンから呼ぶトグル。
   onToggle: () => void
+  // Editor / Terminal の並べ方。左右並べ（horizontal）では最小化ボタンを隠す。
+  layout: WorkLayout
 }
 
 // 右ペイン: 統合ターミナル（spec 2.2.4）。
 // xterm.js（renderer）と node-pty（main）を IPC で接続する。
 // MVP は単一インスタンス。フォルダ未選択時は起動せず、root が変わったら再起動する。
-function TerminalPane({ collapsed, onToggle }: TerminalPaneProps): JSX.Element {
+function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.Element {
   // project root。変化したらターミナルを張り替える（cwd を新 root にする）。
   const root = useWorkspaceStore((s) => s.root)
   // よく使う Git 操作のボタン定義（設定画面で編集可能）。押すと prompt を統合ターミナルに送る。
@@ -147,24 +150,28 @@ function TerminalPane({ collapsed, onToggle }: TerminalPaneProps): JSX.Element {
               </button>
             ))}
         </div>
-        <button
-          type="button"
-          className={`terminal-toggle${collapsed ? ' collapsed' : ''}`}
-          onClick={onToggle}
-          title={collapsed ? 'ターミナルを表示' : 'ターミナルを隠す'}
-          aria-label={collapsed ? 'ターミナルを表示' : 'ターミナルを隠す'}
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-            <path
-              d="M2.5 4.5 L6 8 L9.5 4.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
+        {/* 左右並べ（horizontal）では最小化しても意味が薄く、畳むと復帰できないため
+            最小化ボタンを表示しない。上下並べ（vertical）のときだけ出す。 */}
+        {layout === 'vertical' && (
+          <button
+            type="button"
+            className={`terminal-toggle${collapsed ? ' collapsed' : ''}`}
+            onClick={onToggle}
+            title={collapsed ? 'ターミナルを表示' : 'ターミナルを隠す'}
+            aria-label={collapsed ? 'ターミナルを表示' : 'ターミナルを隠す'}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <path
+                d="M2.5 4.5 L6 8 L9.5 4.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
       </div>
       {/* 折りたたみ中は本体を display:none で隠す。xterm 自体はマウントしたままにして PTY を保持する。 */}
       <div className="terminal-content" style={{ display: collapsed ? 'none' : undefined }}>

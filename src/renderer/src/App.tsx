@@ -69,6 +69,15 @@ function App(): JSX.Element {
     if (terminalCollapsed) terminalPanelRef.current?.collapse()
   }, [collapsedSize, terminalCollapsed])
 
+  // 左右並べ（horizontal）ではターミナルの最小化ボタンを隠すため、畳んだまま
+  // 横並びに切り替わると解除できなくなる。横並びにしたら自動で展開して最小化を解除する。
+  // 上の collapse 用 effect より後に置き、同一コミット内で expand を後勝ちにする。
+  useEffect(() => {
+    if (layout === 'horizontal' && terminalCollapsed) {
+      terminalPanelRef.current?.expand()
+    }
+  }, [layout, terminalCollapsed])
+
   // ヘッダーのアイコンから呼ぶ開閉トグル。
   const toggleTerminal = (): void => {
     const panel = terminalPanelRef.current
@@ -178,7 +187,11 @@ function App(): JSX.Element {
                 }}
                 className="pane"
               >
-                <TerminalPane collapsed={terminalCollapsed} onToggle={toggleTerminal} />
+                <TerminalPane
+                  collapsed={terminalCollapsed}
+                  onToggle={toggleTerminal}
+                  layout={layout}
+                />
               </Panel>
             </PanelGroup>
           </div>
