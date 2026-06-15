@@ -24,7 +24,10 @@
     "productName": "Atelier",
     "asarUnpack": [
       "node_modules/node-pty/**"
-    ]
+    ],
+    "mac": {
+      "icon": "build/icon.icns"
+    }
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.1",

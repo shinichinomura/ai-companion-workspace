@@ -4,3 +4,12 @@ dist/
 *.log
 .DS_Store
 .vite/
+
+# 秘密情報（Gemini API キーなど）
+.env
+
+# アイコン生成の中間物・探索用の大量画像（採用元のみ追跡する）
+build/icon.iconset/
+design/icon-candidates/*.png
+!design/icon-candidates/tb-narrow-left.png
+design/icon-candidates/*.html
