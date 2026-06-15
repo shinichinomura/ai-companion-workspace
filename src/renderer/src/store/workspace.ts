@@ -70,6 +70,9 @@ interface WorkspaceState {
   openFolderByPath: (path: string) => Promise<void>
   toggleDir: (relPath: string) => Promise<void>
   openFile: (node: FileNode) => Promise<void>
+  // project root 相対パスを指定してファイルを開く（プレビュー内リンク等から呼ぶ）。
+  // 開けない（存在しない・ディレクトリ・root 外）場合は何もしない。
+  openFileByRelPath: (relPath: string) => Promise<void>
   // エディタの編集内容を反映する。
   updateContent: (content: string) => void
   // 現在のファイルを保存する。binary / 未選択 / 未変更時は何もしない。
@@ -157,6 +160,26 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         isBinary: result.isBinary
       }
     })
+  },
+
+  // project root 相対パスを指定してファイルを開く。
+  // explorer の openFile と同じく activeFile を差し替えるだけにし、挙動を揃える。
+  openFileByRelPath: async (relPath: string) => {
+    try {
+      const result = await window.api.readFile({ relPath })
+      const name = relPath.slice(relPath.lastIndexOf('/') + 1)
+      set({
+        activeFile: {
+          relPath,
+          name,
+          content: result.content,
+          savedContent: result.content,
+          isBinary: result.isBinary
+        }
+      })
+    } catch {
+      // 読めない（存在しない・ディレクトリ・root 外を main が拒否）場合は何もしない。
+    }
   },
 
   // エディタの編集内容をストアに反映する。
