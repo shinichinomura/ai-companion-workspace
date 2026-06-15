@@ -4,6 +4,14 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerWorkspaceHandlers, disposeWorkspace } from './workspace'
 import { registerTerminalHandlers, disposeTerminal } from './terminal'
 
+// 開発(HMR)と試用(ビルド版)で永続データ（recent-workspaces.json 等）が混ざらないよう、
+// 開発時だけ userData ディレクトリを分ける。
+// electron-vite dev のときだけ ELECTRON_RENDERER_URL が設定される（preview / パッケージ版では未設定）。
+// app ready より前に設定する必要があるため、モジュール読み込み時点で実行する。
+if (process.env['ELECTRON_RENDERER_URL']) {
+  app.setPath('userData', `${app.getPath('userData')}-dev`)
+}
+
 // メインウィンドウを生成する。
 // セキュリティ方針（spec 2.3.3）に従い、renderer に Node.js API を直接公開しない。
 function createWindow(): void {

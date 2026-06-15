@@ -65,12 +65,27 @@ Claude Code を使ったローカルプロジェクト作業を支援する **Ma
 - GUI アプリ起動では shell の PATH が渡らないことがある。ログインシェル（`zsh -lic`）から環境変数を復元し、`/opt/homebrew/bin`・`/usr/local/bin` 等を候補に含める。
 - ファイル削除など破壊的操作は確認ダイアログを出す。
 
+## 開発と試用の使い分け
+
+開発（コードを書く）と試用（実用性を確認する）を明確に分け、両者を混ぜない。
+
+- **開発**: `npm run dev`（HMR）で起動する。
+- **試用**: `npm run package:mac` でパッケージした `dist/` 配下の `.app` を Finder / Dock から起動して、実アプリとして使う。
+
+両者は **永続データ（最近開いたフォルダ等）を別ディレクトリで管理**するため混ざらない（[src/main/index.ts](src/main/index.ts) 参照）。
+
+- 開発時の userData: `…/Application Support/claude-code-companion-workspace-dev`
+- 試用版（ビルド版）の userData: `…/Application Support/claude-code-companion-workspace`
+- 判定は electron-vite dev のみ設定する `ELECTRON_RENDERER_URL` の有無で行う。
+- ペイン幅などの localStorage は origin（`http://localhost` と `file://`）が異なるため自動的に分離される。
+
 ## コマンド
 
-- `npm run dev` — electron-vite 開発サーバー（HMR）でアプリを起動
+- `npm run dev` — electron-vite 開発サーバー（HMR）でアプリを起動（**開発用**）
+- `npm run package:mac` — macOS arm64 向けにパッケージング（electron-builder）。生成された `.app` を起動して**試用**する
 - `npm run build` — typecheck + main/preload/renderer をビルド（`out/` に出力）
 - `npm run typecheck` — main(node) と renderer(web) の型チェック
-- `npm run package:mac` — macOS arm64 向けにパッケージング（electron-builder）
+- `npm run start` — ビルド済み `out/` を Electron で起動（HMR なし。試用版 .app の手前の素早い確認用）
 
 ## 既知の環境上の注意
 
