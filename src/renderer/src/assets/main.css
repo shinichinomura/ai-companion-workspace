@@ -395,6 +395,8 @@ body {
 /* Markdown プレビュー本体 */
 .markdown-preview {
   max-width: 860px;
+  /* プレビュー時は左に余白を持たせて読みやすくする（.pane-body の padding に加算）。 */
+  padding-left: 20px;
   line-height: 1.6;
   -webkit-user-select: text;
   user-select: text;
