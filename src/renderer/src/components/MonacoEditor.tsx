@@ -29,6 +29,8 @@ function MonacoEditor({ path, value, onChange, onSave }: MonacoEditorProps): JSX
     const editor = monaco.editor.create(containerRef.current, {
       value,
       language: languageFromPath(path),
+      // アプリのダークテーマに合わせる（背景 #1e1e1e / 文字 #d4d4d4）。
+      theme: 'vs-dark',
       automaticLayout: true,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
