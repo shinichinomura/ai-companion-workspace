@@ -5,6 +5,7 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
 import remarkRehype from 'remark-rehype'
+import rehypeSlug from 'rehype-slug'
 import rehypeSanitize from 'rehype-sanitize'
 import rehypeStringify from 'rehype-stringify'
 
@@ -15,7 +16,11 @@ const processor = unified()
   .use(remarkGfm)
   // allowDangerousHtml は付けない。Markdown 中の生 HTML はここで落とす。
   .use(remarkRehype)
+  // 見出しに id（スラッグ）を付与し、`[目次](#section)` のようなアンカーリンクを成立させる。
+  // sanitize より前に実行する（生成された id は sanitize 側で user-content- が付与される）。
+  .use(rehypeSlug)
   // デフォルトスキーマ（GitHub 相当）でサニタイズする。
+  // 見出しの id は user-content- プレフィックス付きで保持される（DOM clobbering 対策）。
   .use(rehypeSanitize)
   .use(rehypeStringify)
 
