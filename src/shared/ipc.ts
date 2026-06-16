@@ -254,4 +254,6 @@ export interface WorkspaceApi {
   onTerminalData: (cb: (data: string) => void) => () => void
   // プロセス終了を購読する。返り値は購読解除関数。
   onTerminalExit: (cb: (exit: TerminalExit) => void) => () => void
+  // drag & drop された File の OS 上の絶対パスを得る（Electron 32+ で File.path が廃止されたため）。
+  getPathForFile: (file: File) => string
 }

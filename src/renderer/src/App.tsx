@@ -48,6 +48,19 @@ function App(): JSX.Element {
   const workRef = useRef<HTMLDivElement>(null)
 
   // work エリアの実寸からヘッダーバー相当の % を算出する。レイアウト方向で測る軸を変える。
+  // ターミナル以外の場所にファイルをドロップすると Chromium が file:// に遷移して
+  // アプリ画面が壊れてしまう。ウィンドウ全体で既定のドロップ動作を抑止する。
+  // 実際のドロップ受付は各コンポーネント（ターミナル等）が個別に preventDefault する。
+  useEffect(() => {
+    const prevent = (e: DragEvent): void => e.preventDefault()
+    window.addEventListener('dragover', prevent)
+    window.addEventListener('drop', prevent)
+    return () => {
+      window.removeEventListener('dragover', prevent)
+      window.removeEventListener('drop', prevent)
+    }
+  }, [])
+
   useEffect(() => {
     const el = workRef.current
     if (!el) return

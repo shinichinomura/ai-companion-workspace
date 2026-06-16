@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import {
   IpcChannel,
@@ -78,7 +78,10 @@ const api: WorkspaceApi = {
     const listener = (_e: unknown, exit: TerminalExit): void => cb(exit)
     ipcRenderer.on(IpcChannel.TerminalExit, listener)
     return () => ipcRenderer.removeListener(IpcChannel.TerminalExit, listener)
-  }
+  },
+  // drag & drop された File から OS 上の絶対パスを得る。
+  // Electron 32+ では File.path が廃止されたため webUtils を使う（renderer から直接は触れない）。
+  getPathForFile: (file: File) => webUtils.getPathForFile(file)
 }
 
 // contextIsolation が有効なため、contextBridge 経由でのみ公開する。

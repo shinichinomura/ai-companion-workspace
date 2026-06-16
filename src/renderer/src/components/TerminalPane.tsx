@@ -33,6 +33,8 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
   const startPtyRef = useRef<(() => void) | null>(null)
   // PTY が終了済みかどうか。終了時のみ再起動ボタンを出すために使う。
   const [exited, setExited] = useState(false)
+  // ファイルを drag 中かどうか。ドロップ可能であることを視覚的に示すために使う。
+  const [dragOver, setDragOver] = useState(false)
 
   useEffect(() => {
     // フォルダ未選択時はターミナルを起動しない。
@@ -142,6 +144,42 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
     termRef.current?.focus()
   }
 
+  // ターミナルへドロップしたファイルパスを、シェルでそのまま使える形にエスケープする。
+  // 標準ターミナルへのドロップと同じく、空白やシェル特殊文字を backslash で退避する。
+  const escapePath = (p: string): string => p.replace(/([ !"#$&'()*,;<>?@[\\\]^`{|}~])/g, '\\$1')
+
+  // ファイルがターミナル本体にドロップされたとき。
+  // 各ファイルの絶対パスをエスケープして空白区切りで挿入する（改行は付けず実行はしない）。
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>): void => {
+    e.preventDefault()
+    setDragOver(false)
+    if (!root) return
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length === 0) return
+    const text = files
+      .map((f) => escapePath(window.api.getPathForFile(f)))
+      .filter((p) => p.length > 0)
+      .join(' ')
+    if (!text) return
+    // 末尾に空白を付けて、続けて入力しやすくする（標準ターミナルの挙動に合わせる）。
+    window.api.terminalInput(text + ' ')
+    termRef.current?.focus()
+  }
+
+  // drag 中はドロップを受け付けるため preventDefault が必須。
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>): void => {
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+      if (!dragOver) setDragOver(true)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>): void => {
+    // 子要素間の移動では leave が誤発火するため、コンテナ外に出たときだけ解除する。
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false)
+  }
+
   // 折りたたみから表示に戻ったらサイズを測り直す（非表示中は 0 サイズなので fit がずれる）。
   useEffect(() => {
     if (collapsed) return
@@ -217,7 +255,13 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
       {/* 折りたたみ中は本体を display:none で隠す。xterm 自体はマウントしたままにして PTY を保持する。 */}
       <div className="terminal-content" style={{ display: collapsed ? 'none' : undefined }}>
         {root ? (
-          <div ref={containerRef} className="terminal-body" />
+          <div
+            ref={containerRef}
+            className={`terminal-body${dragOver ? ' drag-over' : ''}`}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+          />
         ) : (
           <div className="pane-body placeholder">フォルダを開くとターミナルが起動します</div>
         )}

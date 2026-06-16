@@ -244,6 +244,11 @@ body {
   background: var(--bg-pane);
 }
 
+/* ファイルを drag 中はドロップ可能であることを枠で示す。 */
+.terminal-body.drag-over {
+  box-shadow: inset 0 0 0 2px var(--accent, #0a84ff);
+}
+
 .placeholder {
   color: var(--fg-dim);
   display: flex;
