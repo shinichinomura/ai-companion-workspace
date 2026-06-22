@@ -9,12 +9,20 @@ import {
 } from '../shared/ipc'
 import { getProjectRoot } from './workspace'
 
-// 統合ターミナル（spec 2.2.4）。MVP は単一インスタンスのため、PTY を 1 個だけ保持する。
+// 統合ターミナル（spec 2.2.4）。タブ化に伴い、PTY を「呼び出し元の webContents（=タブ）」
+// 単位で保持する。各タブは独立した renderer（WebContentsView）なので e.sender.id で一意に引ける。
 // 設計上の制約: Claude Code の認証情報・OAuth token・設定ファイルは読まない／解析しない。
 // 裏でプロンプトを投入しない。あくまでユーザーが見えるシェルとして起動するだけ。
-let term: pty.IPty | null = null
-// 出力／終了の送信先 renderer。
-let target: WebContents | null = null
+interface TerminalState {
+  term: pty.IPty
+  // 出力／終了の送信先 renderer（その PTY を起動したタブ）。
+  target: WebContents
+}
+
+// webContents.id → そのタブの PTY 状態。
+const stateByWcId = new Map<number, TerminalState>()
+// destroyed リスナーを二重登録しないための記録。
+const cleanupBound = new Set<number>()
 
 // 起動するシェルを決める。ユーザーのデフォルトシェル（主に zsh）を使う。
 function resolveShell(): string {
@@ -36,18 +44,16 @@ function buildEnv(): Record<string, string> {
   return env
 }
 
-// 既存の PTY を破棄する。再起動・終了時に呼ぶ。
-function killTerm(): void {
-  if (term) {
-    const t = term
-    term = null
-    try {
-      t.kill()
-    } catch {
-      // 既に死んでいる場合は無視する。
-    }
+// 指定タブの PTY を破棄する。再起動・終了・タブ破棄時に呼ぶ。
+function killTerm(wcId: number): void {
+  const state = stateByWcId.get(wcId)
+  if (!state) return
+  stateByWcId.delete(wcId)
+  try {
+    state.term.kill()
+  } catch {
+    // 既に死んでいる場合は無視する。
   }
-  target = null
 }
 
 // PTY を起動する。project root 未選択時はエラーを返して起動しない。
@@ -55,58 +61,72 @@ function handleStart(
   e: Electron.IpcMainInvokeEvent,
   req: TerminalStartRequest
 ): TerminalStartResult {
-  const root = getProjectRoot()
+  const sender = e.sender
+  const wcId = sender.id
+  const root = getProjectRoot(wcId)
   if (root === null) {
     return { error: 'フォルダが開かれていません' }
   }
 
   // 既存インスタンスがあれば破棄してから張り替える（root 切替時の再起動）。
-  killTerm()
-  target = e.sender
+  killTerm(wcId)
 
   // ログイン + インタラクティブシェルとして起動し、プロファイルを source させる。
-  term = pty.spawn(resolveShell(), ['-l', '-i'], {
+  const term = pty.spawn(resolveShell(), ['-l', '-i'], {
     name: 'xterm-256color',
     cols: req.cols,
     rows: req.rows,
     cwd: root,
     env: buildEnv()
   })
+  stateByWcId.set(wcId, { term, target: sender })
 
   term.onData((data) => {
-    if (target && !target.isDestroyed()) {
-      target.send(IpcChannel.TerminalData, data)
+    if (!sender.isDestroyed()) {
+      sender.send(IpcChannel.TerminalData, data)
     }
   })
 
   term.onExit(({ exitCode }) => {
     const payload: TerminalExit = { exitCode }
-    if (target && !target.isDestroyed()) {
-      target.send(IpcChannel.TerminalExit, payload)
+    if (!sender.isDestroyed()) {
+      sender.send(IpcChannel.TerminalExit, payload)
     }
-    term = null
-    target = null
+    // この PTY 用の状態だけを掃除する（別タブの PTY には触れない）。
+    if (stateByWcId.get(wcId)?.term === term) {
+      stateByWcId.delete(wcId)
+    }
   })
+
+  // タブ（webContents）が破棄されたら PTY も後始末する。1 タブにつき 1 度だけ束ねる。
+  if (!cleanupBound.has(wcId)) {
+    cleanupBound.add(wcId)
+    sender.once('destroyed', () => {
+      cleanupBound.delete(wcId)
+      killTerm(wcId)
+    })
+  }
 
   return {}
 }
 
-// キー入力を PTY に書き込む。
-function handleInput(_e: unknown, data: string): void {
-  term?.write(data)
+// キー入力を、その送信元タブの PTY に書き込む。
+function handleInput(e: Electron.IpcMainEvent, data: string): void {
+  stateByWcId.get(e.sender.id)?.term.write(data)
 }
 
 // 端末サイズを変更する。
-function handleResize(_e: unknown, req: TerminalResizeRequest): void {
+function handleResize(e: Electron.IpcMainEvent, req: TerminalResizeRequest): void {
   // cols/rows は 1 以上でなければ node-pty が例外を投げるため防御する。
+  const term = stateByWcId.get(e.sender.id)?.term
   if (term && req.cols > 0 && req.rows > 0) {
     term.resize(req.cols, req.rows)
   }
 }
 
 // renderer 側からの明示破棄。
-function handleDispose(): void {
-  killTerm()
+function handleDispose(e: Electron.IpcMainEvent): void {
+  killTerm(e.sender.id)
 }
 
 // terminal 関連の IPC ハンドラを登録する。app 起動後に 1 度だけ呼ぶ。
@@ -117,7 +137,9 @@ export function registerTerminalHandlers(): void {
   ipcMain.on(IpcChannel.TerminalDispose, handleDispose)
 }
 
-// アプリ終了時に PTY を後始末する。
+// アプリ終了時に全タブの PTY を後始末する。
 export function disposeTerminal(): void {
-  killTerm()
+  for (const wcId of [...stateByWcId.keys()]) {
+    killTerm(wcId)
+  }
 }

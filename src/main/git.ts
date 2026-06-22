@@ -7,16 +7,23 @@ import { IpcChannel, type GitFileStatus, type GitStatusResult } from '../shared/
 
 const execFileAsync = promisify(execFile)
 
-// 現在 Git 監視中の project root（絶対パス）。未選択／非リポジトリでも root 自体は保持し、
-// computeGitStatus が非リポジトリ判定して isRepo=false を返す。
-let gitRoot: string | null = null
-// GitStatusChanged の送信先 renderer。
-let gitTarget: WebContents | null = null
-// .git（index/HEAD/refs）を監視する watcher。非リポジトリ・未選択時は null。
-let gitWatcher: FSWatcher | null = null
-// .git 変化通知の debounce タイマー（commit 等で複数ファイルが連続変化するため）。
+// Git 監視はタブ（webContents）単位で持つ。各タブが別 project root を開けるため、
+// .git watcher・通知先・root をすべて webContents.id でキーした Map で管理する。
+interface GitState {
+  // 監視中の project root（絶対パス）。非リポジトリでも root 自体は保持し、
+  // computeGitStatus が非リポジトリ判定して isRepo=false を返す。
+  gitRoot: string
+  // GitStatusChanged の送信先 renderer。
+  gitTarget: WebContents
+  // .git（index/HEAD/refs）を監視する watcher。非リポジトリ時は null。
+  gitWatcher: FSWatcher | null
+  // .git 変化通知の debounce タイマー（commit 等で複数ファイルが連続変化するため）。
+  gitDebounce: NodeJS.Timeout | null
+}
+
+// webContents.id → そのタブの Git 監視状態。
+const stateByWcId = new Map<number, GitState>()
 const GIT_EVENT_DEBOUNCE_MS = 300
-let gitDebounce: NodeJS.Timeout | null = null
 
 // git コマンドを root を cwd に実行し、stdout を返す。非ゼロ終了・git 不在時は例外。
 async function runGit(root: string, args: string[]): Promise<string> {
@@ -98,13 +105,16 @@ export async function computeGitStatus(root: string | null): Promise<GitStatusRe
   return { isRepo: true, statuses }
 }
 
-// .git の変化を 1 度だけ debounce して renderer に通知する。
-function pingGitChanged(): void {
-  if (gitDebounce !== null) return
-  gitDebounce = setTimeout(() => {
-    gitDebounce = null
-    if (gitTarget && !gitTarget.isDestroyed()) {
-      gitTarget.send(IpcChannel.GitStatusChanged)
+// .git の変化を 1 度だけ debounce して、該当タブの renderer に通知する。
+function pingGitChanged(wcId: number): void {
+  const state = stateByWcId.get(wcId)
+  if (!state || state.gitDebounce !== null) return
+  state.gitDebounce = setTimeout(() => {
+    const s = stateByWcId.get(wcId)
+    if (!s) return
+    s.gitDebounce = null
+    if (!s.gitTarget.isDestroyed()) {
+      s.gitTarget.send(IpcChannel.GitStatusChanged)
     }
   }, GIT_EVENT_DEBOUNCE_MS)
 }
@@ -112,9 +122,11 @@ function pingGitChanged(): void {
 // project root の .git を監視し、commit / add / checkout 等での status 変化を拾う。
 // 通常の file watcher は .git を無視しているため、ここで別途監視する。
 export async function startGitWatching(root: string, target: WebContents): Promise<void> {
-  await stopGitWatching()
-  gitRoot = root
-  gitTarget = target
+  const wcId = target.id
+  await stopGitWatching(wcId)
+
+  const state: GitState = { gitRoot: root, gitTarget: target, gitWatcher: null, gitDebounce: null }
+  stateByWcId.set(wcId, state)
 
   // .git ディレクトリの実体を解決する（worktree / GIT_DIR 分離にも追従）。
   let gitDir: string
@@ -126,30 +138,38 @@ export async function startGitWatching(root: string, target: WebContents): Promi
   }
   if (!gitDir) return
 
+  // 監視開始までの間に stop/張り替えが起きていたら破棄する。
+  if (stateByWcId.get(wcId) !== state) return
+
   // index / HEAD / refs の変化（add・commit・checkout）だけを監視する。
   // objects/ や logs/ はノイズが多く status に直接効かないため対象外。
-  gitWatcher = chokidar.watch([join(gitDir, 'index'), join(gitDir, 'HEAD'), join(gitDir, 'refs')], {
-    ignoreInitial: true
-  })
-  gitWatcher.on('all', pingGitChanged)
+  state.gitWatcher = chokidar.watch(
+    [join(gitDir, 'index'), join(gitDir, 'HEAD'), join(gitDir, 'refs')],
+    { ignoreInitial: true }
+  )
+  state.gitWatcher.on('all', () => pingGitChanged(wcId))
 }
 
-// Git 監視を停止し、保留中の通知も破棄する。
-export async function stopGitWatching(): Promise<void> {
-  if (gitDebounce !== null) {
-    clearTimeout(gitDebounce)
-    gitDebounce = null
+// 指定タブの Git 監視を停止し、保留中の通知も破棄する。
+export async function stopGitWatching(wcId: number): Promise<void> {
+  const state = stateByWcId.get(wcId)
+  if (!state) return
+  stateByWcId.delete(wcId)
+  if (state.gitDebounce !== null) {
+    clearTimeout(state.gitDebounce)
+    state.gitDebounce = null
   }
-  gitRoot = null
-  gitTarget = null
-  if (gitWatcher) {
-    const w = gitWatcher
-    gitWatcher = null
+  if (state.gitWatcher) {
+    const w = state.gitWatcher
+    state.gitWatcher = null
     await w.close()
   }
 }
 
 // Git 関連の IPC ハンドラを登録する。app 起動後に 1 度だけ呼ぶ。
 export function registerGitHandlers(): void {
-  ipcMain.handle(IpcChannel.GitStatus, () => computeGitStatus(gitRoot))
+  // 送信元タブの project root に対して status を計算する。
+  ipcMain.handle(IpcChannel.GitStatus, (e) =>
+    computeGitStatus(stateByWcId.get(e.sender.id)?.gitRoot ?? null)
+  )
 }

@@ -34,49 +34,64 @@ const IGNORED_DIRS = new Set([
 // テキストとして開くファイルの上限サイズ（バイト）。これを超えるものは binary 扱い。
 const MAX_TEXT_FILE_SIZE = 5 * 1024 * 1024
 
-// 現在開いている project root の絶対パス。未選択なら null。
-let projectRoot: string | null = null
-
-// 現在稼働中の file watcher。フォルダ未選択／再オープン前は null。
-let watcher: FSWatcher | null = null
-
-// 変更通知の debounce 用バッファとタイマー（spec 2.2.5 の near real-time）。
-const FS_EVENT_DEBOUNCE_MS = 150
-let pendingChanges: FsChange[] = []
-let flushTimer: NodeJS.Timeout | null = null
-// 変更通知の送信先 renderer。openFolder を実行した webContents を使う。
-let watchTarget: WebContents | null = null
-
-// 絶対パスを project root 相対・'/' 区切りに正規化する。
-function toRelPath(absPath: string): string {
-  if (projectRoot === null) return absPath
-  return relative(projectRoot, absPath).split(sep).join('/')
+// タブ（webContents）単位の file 監視状態。各タブが別 project root を開けるため、
+// root・watcher・通知バッファをすべて webContents.id でキーした Map で管理する。
+interface WatchState {
+  // 監視中の project root（絶対パス）。
+  root: string
+  // 変更通知の送信先 renderer（このタブ）。
+  target: WebContents
+  // 稼働中の file watcher。張り替え中・非開始時は null。
+  watcher: FSWatcher | null
+  // debounce 用バッファとタイマー（spec 2.2.5 の near real-time）。
+  pending: FsChange[]
+  flushTimer: NodeJS.Timeout | null
 }
 
-// バッファ済みの変更をまとめて renderer に送る。
-function flushChanges(): void {
-  flushTimer = null
-  if (pendingChanges.length === 0) return
-  const batch: FsEventBatch = { changes: pendingChanges }
-  pendingChanges = []
-  if (watchTarget && !watchTarget.isDestroyed()) {
-    watchTarget.send(IpcChannel.FsEvent, batch)
+const FS_EVENT_DEBOUNCE_MS = 150
+
+// webContents.id → 開いている project root（絶対パス）。
+const rootByWcId = new Map<number, string>()
+// webContents.id → file 監視状態。
+const watchByWcId = new Map<number, WatchState>()
+// destroyed リスナーを二重登録しないための記録。
+const cleanupBound = new Set<number>()
+
+// 絶対パスを root 相対・'/' 区切りに正規化する。
+function toRelPath(root: string, absPath: string): string {
+  return relative(root, absPath).split(sep).join('/')
+}
+
+// バッファ済みの変更をまとめて該当タブの renderer に送る。
+function flushChanges(wcId: number): void {
+  const state = watchByWcId.get(wcId)
+  if (!state) return
+  state.flushTimer = null
+  if (state.pending.length === 0) return
+  const batch: FsEventBatch = { changes: state.pending }
+  state.pending = []
+  if (!state.target.isDestroyed()) {
+    state.target.send(IpcChannel.FsEvent, batch)
   }
 }
 
 // 1 件の変更をバッファに積み、debounce して flush する。
-function enqueueChange(kind: FsChangeKind, absPath: string): void {
-  pendingChanges.push({ kind, relPath: toRelPath(absPath) })
-  if (flushTimer === null) {
-    flushTimer = setTimeout(flushChanges, FS_EVENT_DEBOUNCE_MS)
+function enqueueChange(wcId: number, kind: FsChangeKind, absPath: string): void {
+  const state = watchByWcId.get(wcId)
+  if (!state) return
+  state.pending.push({ kind, relPath: toRelPath(state.root, absPath) })
+  if (state.flushTimer === null) {
+    state.flushTimer = setTimeout(() => flushChanges(wcId), FS_EVENT_DEBOUNCE_MS)
   }
 }
 
-// project root の監視を開始する。既存 watcher があれば閉じてから張り替える。
+// 指定タブの project root の監視を開始する。既存 watcher があれば閉じてから張り替える。
 async function startWatching(root: string, target: WebContents): Promise<void> {
-  await stopWatching()
-  watchTarget = target
-  watcher = chokidar.watch(root, {
+  const wcId = target.id
+  await stopWatching(wcId)
+  const state: WatchState = { root, target, watcher: null, pending: [], flushTimer: null }
+  watchByWcId.set(wcId, state)
+  state.watcher = chokidar.watch(root, {
     // 初期スキャンの add イベントは不要（ツリーは readDir で取得済み）。
     ignoreInitial: true,
     // ignore 対象ディレクトリはパスセグメント単位で除外する。
@@ -84,42 +99,46 @@ async function startWatching(root: string, target: WebContents): Promise<void> {
     // 保存途中の中間状態を読まないよう、書き込み完了を待ってから通知する。
     awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
   })
-  watcher
-    .on('add', (p) => enqueueChange('add', p))
-    .on('change', (p) => enqueueChange('change', p))
-    .on('unlink', (p) => enqueueChange('unlink', p))
-    .on('addDir', (p) => enqueueChange('addDir', p))
-    .on('unlinkDir', (p) => enqueueChange('unlinkDir', p))
+  state.watcher
+    .on('add', (p) => enqueueChange(wcId, 'add', p))
+    .on('change', (p) => enqueueChange(wcId, 'change', p))
+    .on('unlink', (p) => enqueueChange(wcId, 'unlink', p))
+    .on('addDir', (p) => enqueueChange(wcId, 'addDir', p))
+    .on('unlinkDir', (p) => enqueueChange(wcId, 'unlinkDir', p))
   // .git（index/HEAD/refs）も監視し、ターミナルでの commit/add 等を Git status に反映する。
   await startGitWatching(root, target)
 }
 
-// 監視を停止し、保留中の通知も破棄する。
-async function stopWatching(): Promise<void> {
-  if (flushTimer !== null) {
-    clearTimeout(flushTimer)
-    flushTimer = null
+// 指定タブの監視を停止し、保留中の通知も破棄する。
+async function stopWatching(wcId: number): Promise<void> {
+  const state = watchByWcId.get(wcId)
+  await stopGitWatching(wcId)
+  if (!state) return
+  watchByWcId.delete(wcId)
+  if (state.flushTimer !== null) {
+    clearTimeout(state.flushTimer)
+    state.flushTimer = null
   }
-  pendingChanges = []
-  watchTarget = null
-  await stopGitWatching()
-  if (watcher) {
-    const w = watcher
-    watcher = null
+  if (state.watcher) {
+    const w = state.watcher
+    state.watcher = null
     await w.close()
   }
 }
 
-// relPath（project root からの相対パス）を絶対パスに解決する。
-// project root 外へのアクセスは拒否する（spec 2.3.3 / 6.3）。
-function resolveWithinRoot(relPath: string): string {
-  if (projectRoot === null) {
-    throw new Error('フォルダが開かれていません')
-  }
+// 指定タブ（webContents）が破棄されたときの後始末。root と監視を解放する。
+async function cleanupWebContents(wcId: number): Promise<void> {
+  cleanupBound.delete(wcId)
+  rootByWcId.delete(wcId)
+  await stopWatching(wcId)
+}
+
+// relPath を root 配下の絶対パスに解決する。root 外は拒否する（spec 2.3.3 / 6.3）。
+function resolveWithin(root: string, relPath: string): string {
   // 先頭の '/' を除去し、normalize した上で root と結合する。
   const cleaned = normalize(relPath).replace(/^[/\\]+/, '')
-  const abs = normalize(join(projectRoot, cleaned))
-  const rel = relative(projectRoot, abs)
+  const abs = normalize(join(root, cleaned))
+  const rel = relative(root, abs)
   // rel が '..' で始まる、または絶対パスになる場合は root 外。
   if (rel === '..' || rel.startsWith(`..${sep}`)) {
     throw new Error(`project root 外へのアクセスは許可されていません: ${relPath}`)
@@ -127,7 +146,16 @@ function resolveWithinRoot(relPath: string): string {
   return abs
 }
 
-// 指定した root を project root として開く。
+// 送信元タブの project root を基準に relPath を絶対パスへ解決する。
+function resolveWithinRoot(wcId: number, relPath: string): string {
+  const root = rootByWcId.get(wcId)
+  if (root === undefined) {
+    throw new Error('フォルダが開かれていません')
+  }
+  return resolveWithin(root, relPath)
+}
+
+// 指定した root を、送信元タブの project root として開く。
 // watcher を張り替え、最近開いた一覧を更新する。存在しない／ディレクトリでなければ null。
 async function openRoot(
   root: string,
@@ -144,10 +172,17 @@ async function openRoot(
     await removeRecentFolder(root)
     return null
   }
-  projectRoot = root
-  // 新しい root の監視を開始する（前の root の watcher は張り替えで閉じる）。
+  rootByWcId.set(target.id, root)
+  // 新しい root の監視を開始する（このタブの前の root の watcher は張り替えで閉じる）。
   await startWatching(root, target)
   await addRecentFolder(root)
+  // タブ（webContents）の破棄時に root と監視を解放する。1 タブにつき 1 度だけ束ねる。
+  if (!cleanupBound.has(target.id)) {
+    cleanupBound.add(target.id)
+    target.once('destroyed', () => {
+      void cleanupWebContents(target.id)
+    })
+  }
   return { root, name: basename(root) }
 }
 
@@ -181,8 +216,11 @@ async function handleGetRecentFolders(): Promise<string[]> {
 
 // 指定ディレクトリの直下のエントリを返す（遅延展開のため 1 階層のみ）。
 // ディレクトリを先・名前順でソートして返す。
-async function handleReadDir(_e: unknown, req: ReadDirRequest): Promise<FileNode[]> {
-  const absDir = resolveWithinRoot(req.relPath)
+async function handleReadDir(
+  e: Electron.IpcMainInvokeEvent,
+  req: ReadDirRequest
+): Promise<FileNode[]> {
+  const absDir = resolveWithinRoot(e.sender.id, req.relPath)
   const entries = await fs.readdir(absDir, { withFileTypes: true })
 
   const nodes: FileNode[] = []
@@ -203,8 +241,11 @@ async function handleReadDir(_e: unknown, req: ReadDirRequest): Promise<FileNode
 }
 
 // ファイル内容をテキストとして読み込む。binary / 巨大ファイルは isBinary=true で返す。
-async function handleReadFile(_e: unknown, req: ReadFileRequest): Promise<ReadFileResult> {
-  const abs = resolveWithinRoot(req.relPath)
+async function handleReadFile(
+  e: Electron.IpcMainInvokeEvent,
+  req: ReadFileRequest
+): Promise<ReadFileResult> {
+  const abs = resolveWithinRoot(e.sender.id, req.relPath)
   const stat = await fs.stat(abs)
   if (!stat.isFile()) {
     throw new Error(`ファイルではありません: ${req.relPath}`)
@@ -222,8 +263,11 @@ async function handleReadFile(_e: unknown, req: ReadFileRequest): Promise<ReadFi
 
 // ファイル内容を UTF-8 テキストとして書き込む。project root 外は resolveWithinRoot で拒否する。
 // 既存パスがディレクトリの場合は拒否する（新規ファイル作成は許可する）。
-async function handleWriteFile(_e: unknown, req: WriteFileRequest): Promise<WriteFileResult> {
-  const abs = resolveWithinRoot(req.relPath)
+async function handleWriteFile(
+  e: Electron.IpcMainInvokeEvent,
+  req: WriteFileRequest
+): Promise<WriteFileResult> {
+  const abs = resolveWithinRoot(e.sender.id, req.relPath)
   try {
     const stat = await fs.stat(abs)
     if (stat.isDirectory()) {
@@ -253,6 +297,24 @@ const IMAGE_MIME: Record<string, string> = {
   '.ico': 'image/x-icon'
 }
 
+// メディアリクエストの解決に使う project root を返す。
+// 媒体プロトコルのハンドラは送信元 webContents を受け取れないため、
+// フォーカス中のウィンドウの root を使う。単一登録（単一タブ）ならそれを使う。
+// 注: Phase 2 で各タブビューを専用 session に分離し、session 単位でハンドラを
+// 登録する方式に置き換える。WebContentsView 化後はフォーカス＝クロームシェルに
+// なるため、この heuristic ではタブを特定できなくなる。
+function getRootForMedia(): string | null {
+  const focused = BrowserWindow.getFocusedWindow()
+  if (focused) {
+    const r = rootByWcId.get(focused.webContents.id)
+    if (r !== undefined) return r
+  }
+  if (rootByWcId.size === 1) {
+    return [...rootByWcId.values()][0]
+  }
+  return null
+}
+
 // MEDIA_SCHEME のリクエストを処理し、project root 内の画像ファイルを返す。
 // URL は mediaUrl() が生成する `atelier-img://r/<encoded relPath>` 形式。
 // project root 外・存在しない・非画像・フォルダ未選択はいずれもエラー応答にする。
@@ -263,8 +325,10 @@ async function handleMediaRequest(request: Request): Promise<Response> {
     const relPath = decodeURIComponent(url.pathname).replace(/^\/+/, '')
     if (!relPath) return new Response(null, { status: 404 })
 
-    // project root 外・未選択は resolveWithinRoot が例外を投げる（catch で 404）。
-    const abs = resolveWithinRoot(relPath)
+    const root = getRootForMedia()
+    if (root === null) return new Response(null, { status: 404 })
+    // project root 外は resolveWithin が例外を投げる（catch で 404）。
+    const abs = resolveWithin(root, relPath)
     const mime = IMAGE_MIME[extname(abs).toLowerCase()]
     // 許可した画像拡張子以外は配信しない。
     if (!mime) return new Response(null, { status: 415 })
@@ -287,8 +351,11 @@ export function registerMediaProtocol(): void {
 // 指定ファイルを OS の既定アプリ（関連付け）で開く。バイナリ/巨大ファイル用。
 // project root 外は resolveWithinRoot が拒否する。ディレクトリは対象外。
 // 戻り値は shell.openPath のエラーメッセージ（成功時は空文字）。
-async function handleOpenPath(_e: unknown, req: OpenPathRequest): Promise<string> {
-  const abs = resolveWithinRoot(req.relPath)
+async function handleOpenPath(
+  e: Electron.IpcMainInvokeEvent,
+  req: OpenPathRequest
+): Promise<string> {
+  const abs = resolveWithinRoot(e.sender.id, req.relPath)
   const stat = await fs.stat(abs)
   if (!stat.isFile()) {
     return `ファイルではありません: ${req.relPath}`
@@ -307,12 +374,12 @@ export function registerWorkspaceHandlers(): void {
   ipcMain.handle(IpcChannel.OpenPath, handleOpenPath)
 }
 
-// アプリ終了時などに watcher を後始末する。
+// アプリ終了時などに全タブの watcher を後始末する。
 export async function disposeWorkspace(): Promise<void> {
-  await stopWatching()
+  await Promise.all([...watchByWcId.keys()].map((wcId) => stopWatching(wcId)))
 }
 
-// 現在の project root（絶対パス）。未選択は null。ターミナルの cwd に使う。
-export function getProjectRoot(): string | null {
-  return projectRoot
+// 指定タブ（webContents）の project root（絶対パス）。未選択は null。ターミナルの cwd に使う。
+export function getProjectRoot(wcId: number): string | null {
+  return rootByWcId.get(wcId) ?? null
 }
