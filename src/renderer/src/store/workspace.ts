@@ -27,12 +27,15 @@ function parentDir(relPath: string): string {
   return idx === -1 ? '' : relPath.slice(0, idx)
 }
 
-// 隠しファイル（. で始まる名前）の表示設定の localStorage キー。
-const SHOW_HIDDEN_STORAGE_KEY = 'show-hidden'
+// 隠しファイル表示設定の localStorage キー。プロジェクト（root）ごとに分ける。
+// 全タブは localStorage を共有するため、root をキーに含めてタブ（プロジェクト）単位で保存する。
+function showHiddenKey(root: string | null): string {
+  return `show-hidden:${root ?? '__none__'}`
+}
 
-// localStorage から隠しファイル表示設定を復元する（既定は非表示）。
-function loadShowHidden(): boolean {
-  return localStorage.getItem(SHOW_HIDDEN_STORAGE_KEY) === 'true'
+// localStorage から、指定 root の隠しファイル表示設定を復元する（既定は非表示）。
+function loadShowHidden(root: string | null): boolean {
+  return localStorage.getItem(showHiddenKey(root)) === 'true'
 }
 
 // 未保存変更があるか。content と savedContent の差分で判定する。
@@ -82,7 +85,9 @@ async function applyOpenResult(
     expandedDirs: new Set(),
     activeFile: null,
     // 前のフォルダの Git status を持ち越さない。直後に refreshGitStatus で埋め直す。
-    gitStatuses: {}
+    gitStatuses: {},
+    // 開いたプロジェクト固有の隠しファイル表示設定に切り替える。
+    showHidden: loadShowHidden(result.root)
   })
 }
 
@@ -144,7 +149,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   expandedDirs: new Set(),
   activeFile: null,
   recentFolders: [],
-  showHidden: loadShowHidden(),
+  // 起動直後は root 未確定のため既定値で初期化し、フォルダを開いた時点で root 別の値に切り替える。
+  showHidden: loadShowHidden(null),
   gitStatuses: {},
 
   // フォルダを開き、ルート直下を読み込む。
@@ -352,9 +358,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ activeFile: { ...active, externallyChanged: false, externallyDeleted: false } })
   },
 
-  // 隠しファイルの表示設定を切り替える。
+  // 隠しファイルの表示設定を切り替える（現在のプロジェクト root のキーに保存する）。
   setShowHidden: (show: boolean) => {
-    localStorage.setItem(SHOW_HIDDEN_STORAGE_KEY, show ? 'true' : 'false')
+    localStorage.setItem(showHiddenKey(get().root), show ? 'true' : 'false')
     set({ showHidden: show })
   },
 

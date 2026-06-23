@@ -9,15 +9,26 @@ import { useWorkspaceStore } from './store/workspace'
 import { useSettingsStore } from './store/settings'
 import type { WorkLayout } from '../../shared/ipc'
 
-const LAYOUT_STORAGE_KEY = 'work-layout'
-const TERMINAL_COLLAPSED_KEY = 'terminal-collapsed'
-
 // 折りたたみ時に残すターミナルヘッダーバーの高さ（CSS の .terminal-header と合わせる）。
 const TERMINAL_HEADER_PX = 30
 
-// localStorage から初期レイアウトを復元する（不正値は左右にフォールバック）。
-function loadLayout(): WorkLayout {
-  return localStorage.getItem(LAYOUT_STORAGE_KEY) === 'vertical' ? 'vertical' : 'horizontal'
+// UI 設定（レイアウト・ターミナル折りたたみ・ペイン幅）は localStorage に保存するが、
+// 全タブが localStorage を共有するため、root（プロジェクト）をキーに含めてタブ単位で分ける。
+function layoutKey(root: string | null): string {
+  return `work-layout:${root ?? '__none__'}`
+}
+function collapsedKey(root: string | null): string {
+  return `terminal-collapsed:${root ?? '__none__'}`
+}
+
+// localStorage から、指定 root のレイアウトを復元する（不正値は左右にフォールバック）。
+function loadLayout(root: string | null): WorkLayout {
+  return localStorage.getItem(layoutKey(root)) === 'vertical' ? 'vertical' : 'horizontal'
+}
+
+// localStorage から、指定 root のターミナル折りたたみ状態を復元する。
+function loadCollapsed(root: string | null): boolean {
+  return localStorage.getItem(collapsedKey(root)) === 'true'
 }
 
 // アプリ全体のシェル。spec 2.1 の 3 ペイン構成（Explorer / Editor / Terminal）。
@@ -30,18 +41,21 @@ function App(): JSX.Element {
   const setShowHidden = useWorkspaceStore((s) => s.setShowHidden)
   const refreshGitStatus = useWorkspaceStore((s) => s.refreshGitStatus)
   const loadSettings = useSettingsStore((s) => s.load)
+  // 現在のプロジェクト root。UI 設定（レイアウト等）の保存キーに使う。
+  const root = useWorkspaceStore((s) => s.root)
+  // react-resizable-panels の autoSaveId / 再マウント key に使う root 識別子。
+  const rootKey = root ?? '__none__'
 
   // 設定モーダルの表示状態。アプリメニューの「設定…」で開く。
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  // Editor / Terminal の並べ方。ネイティブの「表示」メニューで切り替え、localStorage に保存する。
-  const [layout, setLayout] = useState<WorkLayout>(loadLayout)
+  // Editor / Terminal の並べ方。ネイティブの「表示」メニューで切り替え、root 別に localStorage 保存する。
+  // 起動直後は root 未確定のため既定値で初期化し、フォルダを開いた時点で root 別の値へ切り替える。
+  const [layout, setLayout] = useState<WorkLayout>(() => loadLayout(null))
 
   // ターミナルペインの折りたたみ状態。閉じてもヘッダーバーだけは残す。
   // PTY を生かしたまま畳むため、Panel を collapsible にしてサイズだけを縮める（再マウントしない）。
-  const [terminalCollapsed, setTerminalCollapsed] = useState(
-    () => localStorage.getItem(TERMINAL_COLLAPSED_KEY) === 'true'
-  )
+  const [terminalCollapsed, setTerminalCollapsed] = useState(() => loadCollapsed(null))
   // 折りたたみ時の Panel サイズ（%）。ヘッダーバーの高さがレイアウト方向の実サイズに対して
   // 何 % になるかを実測して求める。
   const [collapsedSize, setCollapsedSize] = useState(6)
@@ -100,21 +114,29 @@ function App(): JSX.Element {
     else panel.collapse()
   }
 
-  // 表示メニューからの切り替え通知を購読し、状態と localStorage に反映する。
-  // マウント時に現在のレイアウトを main へ通知してメニューのチェックを同期する。
+  // root（開いているプロジェクト）が変わったら、そのプロジェクトの UI 設定を読み直し、
+  // レイアウト・隠しファイルの現在値を main に通知してメニューのチェックを同期する。
+  // showHidden は store 側で applyOpenResult が root 別の値に更新済み。
   useEffect(() => {
-    window.api.reportWorkLayout(loadLayout())
+    const nextLayout = loadLayout(root)
+    setLayout(nextLayout)
+    setTerminalCollapsed(loadCollapsed(root))
+    window.api.reportWorkLayout(nextLayout)
+    window.api.reportShowHidden(useWorkspaceStore.getState().showHidden)
+  }, [root])
+
+  // 表示メニューからのレイアウト切り替えを購読し、状態と root 別 localStorage に反映する。
+  // root が変わるたびに張り直し、保存キーが現在の root を指すようにする。
+  useEffect(() => {
     const unsubscribe = window.api.onSetWorkLayout((next) => {
       setLayout(next)
-      localStorage.setItem(LAYOUT_STORAGE_KEY, next)
+      localStorage.setItem(layoutKey(root), next)
     })
     return unsubscribe
-  }, [])
+  }, [root])
 
-  // 「表示」メニューの隠しファイル表示トグルを購読し、状態と localStorage に反映する。
-  // マウント時に現在の設定を main へ通知してメニューのチェックを同期する。
+  // 「表示」メニューの隠しファイル表示トグルを購読し、状態と localStorage（root 別）に反映する。
   useEffect(() => {
-    window.api.reportShowHidden(useWorkspaceStore.getState().showHidden)
     const unsubscribe = window.api.onSetShowHidden((show) => {
       setShowHidden(show)
     })
@@ -171,7 +193,16 @@ function App(): JSX.Element {
     <div className="app">
       {/* タブストリップ（タイトルバー）はクロームシェル側に移したため、ここでは描画しない。
           各タブビューはストリップの下に配置されるので信号機との干渉も無い。 */}
-      <PanelGroup direction="horizontal" autoSaveId="outer-layout">
+      {/* ペイン幅も root（プロジェクト）別に保存する。autoSaveId を root 別にし、
+          root が変わったら key で貼り直して保存済みサイズを読み直す。
+          root 変更（= タブ内でのフォルダ切替）は頻度が低く、その際は元々ターミナルも
+          再起動するため、再マウントの副作用は問題にならない。レイアウト方向(左右/上下)の
+          切替は rootKey を変えないので、内側 PanelGroup は再マウントされず PTY を保つ。 */}
+      <PanelGroup
+        key={`outer-${rootKey}`}
+        direction="horizontal"
+        autoSaveId={`outer-layout:${rootKey}`}
+      >
         <Panel defaultSize={20} minSize={12} className="pane pane--soft">
           <FileExplorer />
         </Panel>
@@ -182,7 +213,7 @@ function App(): JSX.Element {
               direction prop の変更だけで切り替える（v2 は再マウント不要。サイズは % で保持され方向を変えても崩れない）。
               ヘッダー相当 % を実測するため PanelGroup を div でラップして寸法を測る。 */}
           <div className="work-area" ref={workRef}>
-            <PanelGroup direction={layout} autoSaveId="work-layout" className="work-group">
+            <PanelGroup direction={layout} autoSaveId={`work-layout:${rootKey}`} className="work-group">
               <Panel defaultSize={60} minSize={20} className="pane">
                 <EditorPane />
               </Panel>
@@ -196,11 +227,11 @@ function App(): JSX.Element {
                 collapsedSize={collapsedSize}
                 onCollapse={() => {
                   setTerminalCollapsed(true)
-                  localStorage.setItem(TERMINAL_COLLAPSED_KEY, 'true')
+                  localStorage.setItem(collapsedKey(root), 'true')
                 }}
                 onExpand={() => {
                   setTerminalCollapsed(false)
-                  localStorage.setItem(TERMINAL_COLLAPSED_KEY, 'false')
+                  localStorage.setItem(collapsedKey(root), 'false')
                 }}
                 className="pane pane--soft"
               >

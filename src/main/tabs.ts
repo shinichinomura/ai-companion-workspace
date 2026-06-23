@@ -3,6 +3,7 @@ import { basename, join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { IpcChannel, type TabsState } from '../shared/ipc'
 import { getProjectRoot, setRootChangedListener } from './workspace'
+import { syncMenuChecks, forgetTabMenuState } from './menu'
 
 // タブストリップ（クロームシェル）の高さ。renderer の shell.css の .tabbar と一致させる。
 const STRIP_H = 38
@@ -79,6 +80,8 @@ function activateTab(id: number): void {
   if (tab && !tab.view.webContents.isDestroyed()) {
     tab.view.webContents.focus()
   }
+  // メニューのチェック状態をこのタブの値に合わせる。
+  syncMenuChecks(id)
   notifyShell()
 }
 
@@ -133,7 +136,10 @@ function closeTab(id: number): void {
   win.contentView.removeChildView(tab.view)
   // webContents を破棄する。destroyed で workspace/terminal/git 側の後始末が走る。
   tab.view.webContents.close()
+  forgetTabMenuState(id)
 
+  // 閉じた結果アクティブが変わったら、そのタブの値でメニューを同期する。
+  if (activeId !== null) syncMenuChecks(activeId)
   layout()
   notifyShell()
 }

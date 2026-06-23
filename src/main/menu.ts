@@ -9,13 +9,43 @@ import {
   activateRelativeTab
 } from './tabs'
 
-// メニューに保持する現在のレイアウト（チェック状態の初期値）。
-// 実体の真値は renderer 側（localStorage）。起動時に renderer から通知されて同期される。
+// メニューに現在表示しているチェック状態（アクティブタブの値）。buildAppMenu の初期値にも使う。
+// 実体の真値は renderer 側（localStorage、root 別）。renderer からの通知で同期される。
 let currentLayout: WorkLayout = 'horizontal'
-
-// 隠しファイル（. で始まるファイル）を表示するか。
-// 実体の真値は renderer 側（localStorage）。起動時に renderer から通知されて同期される。
 let currentShowHidden = false
+
+// タブ（webContents.id）ごとのレイアウト／隠しファイル表示。タブ切替時のメニュー同期に使う。
+// 全タブが localStorage を共有しつつ root 別に値を持つため、main 側でもタブ単位に保持する。
+const layoutByWc = new Map<number, WorkLayout>()
+const showHiddenByWc = new Map<number, boolean>()
+
+// メニューのレイアウト用ラジオのチェックを更新する。
+function applyLayoutCheck(layout: WorkLayout): void {
+  currentLayout = layout
+  const item = Menu.getApplicationMenu()?.getMenuItemById(
+    layout === 'vertical' ? 'layout-vertical' : 'layout-horizontal'
+  )
+  if (item) item.checked = true
+}
+
+// メニューの隠しファイル表示チェックを更新する。
+function applyShowHiddenCheck(show: boolean): void {
+  currentShowHidden = show
+  const item = Menu.getApplicationMenu()?.getMenuItemById('show-hidden')
+  if (item) item.checked = show
+}
+
+// アクティブタブが変わったとき、そのタブの値でメニューのチェックを同期する。tabs.ts が呼ぶ。
+export function syncMenuChecks(wcId: number): void {
+  applyLayoutCheck(layoutByWc.get(wcId) ?? 'horizontal')
+  applyShowHiddenCheck(showHiddenByWc.get(wcId) ?? false)
+}
+
+// タブが閉じられたら記録を破棄する。tabs.ts が呼ぶ。
+export function forgetTabMenuState(wcId: number): void {
+  layoutByWc.delete(wcId)
+  showHiddenByWc.delete(wcId)
+}
 
 // 表示メニューでレイアウトが選ばれたら、アクティブタブの renderer にのみ通知する。
 // 注: 全タブは localStorage（同一 session）を共有するため、保存値はタブ共通で、
@@ -172,21 +202,16 @@ export function buildAppMenu(): void {
 
 // レイアウト連携の IPC を登録する。app ready 後に 1 度だけ呼ぶ。
 export function registerMenuHandlers(): void {
-  // renderer の現在レイアウト（起動時の localStorage 復元値・以降の変更）を受けて
-  // メニューのチェック状態を同期する。
-  ipcMain.on(IpcChannel.WorkLayoutChanged, (_e, layout: WorkLayout) => {
-    currentLayout = layout
-    const menu = Menu.getApplicationMenu()
-    const item = menu?.getMenuItemById(
-      layout === 'vertical' ? 'layout-vertical' : 'layout-horizontal'
-    )
-    if (item) item.checked = true
+  // 各タブの現在レイアウト（起動時の localStorage 復元値・以降の変更）を記録する。
+  // 報告元がアクティブタブならメニューのチェックも即時に更新する。
+  ipcMain.on(IpcChannel.WorkLayoutChanged, (e, layout: WorkLayout) => {
+    layoutByWc.set(e.sender.id, layout)
+    if (getActiveTabWebContents()?.id === e.sender.id) applyLayoutCheck(layout)
   })
 
-  // renderer の現在の隠しファイル表示状態を受けて、メニューのチェック状態を同期する。
-  ipcMain.on(IpcChannel.ShowHiddenChanged, (_e, show: boolean) => {
-    currentShowHidden = show
-    const item = Menu.getApplicationMenu()?.getMenuItemById('show-hidden')
-    if (item) item.checked = show
+  // 各タブの隠しファイル表示状態を記録し、アクティブタブならメニューのチェックも更新する。
+  ipcMain.on(IpcChannel.ShowHiddenChanged, (e, show: boolean) => {
+    showHiddenByWc.set(e.sender.id, show)
+    if (getActiveTabWebContents()?.id === e.sender.id) applyShowHiddenCheck(show)
   })
 }
