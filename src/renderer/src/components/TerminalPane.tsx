@@ -35,6 +35,10 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
   const [exited, setExited] = useState(false)
   // ファイルを drag 中かどうか。ドロップ可能であることを視覚的に示すために使う。
   const [dragOver, setDragOver] = useState(false)
+  // 定型プロンプトのメニューを開いているか。ヘッダーのアイコンを押すと展開する。
+  const [promptMenuOpen, setPromptMenuOpen] = useState(false)
+  // メニューの外側クリック判定のため、トリガー＋メニュー全体を包む要素を保持する。
+  const promptMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     // フォルダ未選択時はターミナルを起動しない。
@@ -187,6 +191,23 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false)
   }
 
+  // 定型プロンプトのメニューを開いている間は、外側クリックと Escape で閉じる。
+  useEffect(() => {
+    if (!promptMenuOpen) return
+    const onPointerDown = (e: MouseEvent): void => {
+      if (!promptMenuRef.current?.contains(e.target as Node | null)) setPromptMenuOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setPromptMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [promptMenuOpen])
+
   // 折りたたみから表示に戻ったらサイズを測り直す（非表示中は 0 サイズなので fit がずれる）。
   useEffect(() => {
     if (collapsed) return
@@ -207,29 +228,62 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
       {/* 開閉バー。折りたたんでもこのバーだけは残る。 */}
       <div className="terminal-header">
         <span>Terminal</span>
-        {/* よく使う Git 操作を Claude に送る定型プロンプトのボタン群（設定画面で編集可能）。
+        {/* よく使う Git 操作を Claude に送る定型プロンプト。ヘッダーにはアイコンだけを置き、
+            押すと登録済みの選択肢をメニューとして展開する（設定画面で編集可能）。
             ラベルが空の行は表示しない。 */}
-        <div className="terminal-actions">
-          {quickPrompts
-            .filter((q) => q.label.trim())
-            .map((q) => (
+        {(() => {
+          const items = quickPrompts.filter((q) => q.label.trim())
+          return (
+            <div className="terminal-actions" ref={promptMenuRef}>
               <button
-                key={q.id}
                 type="button"
-                className="terminal-action-btn"
-                onClick={() => sendPrompt(q.prompt)}
-                disabled={!root || !q.prompt.trim()}
-                title={q.prompt}
+                className={`terminal-action-trigger${promptMenuOpen ? ' open' : ''}`}
+                onClick={() => setPromptMenuOpen((v) => !v)}
+                disabled={!root || items.length === 0}
+                title="定型プロンプト"
+                aria-label="定型プロンプト"
+                aria-haspopup="menu"
+                aria-expanded={promptMenuOpen}
               >
-                {q.label}
+                {/* 稲妻アイコン。「素早く送るショートカット」を表す。 */}
+                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M13 2 L4 14 H11 L11 22 L20 10 H13 Z"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </button>
-            ))}
-        </div>
+              {promptMenuOpen && items.length > 0 && (
+                <div className="terminal-action-menu" role="menu">
+                  {items.map((q) => (
+                    <button
+                      key={q.id}
+                      type="button"
+                      role="menuitem"
+                      className="terminal-action-menu-item"
+                      onClick={() => {
+                        setPromptMenuOpen(false)
+                        sendPrompt(q.prompt)
+                      }}
+                      disabled={!root || !q.prompt.trim()}
+                      title={q.prompt}
+                    >
+                      {q.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
         {/* PTY が終了したときだけ再起動ボタンを出す。押すと同じ cwd でシェルを起動し直す。 */}
         {root && exited && (
           <button
             type="button"
-            className="terminal-action-btn terminal-restart-btn"
+            className="terminal-restart-btn"
             onClick={restartTerminal}
             title="ターミナルを再起動する"
           >

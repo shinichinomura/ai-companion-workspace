@@ -159,33 +159,79 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-/* 定型プロンプトのボタン群。タイトルを左に寄せ、ボタン群とトグルを右側にまとめる。 */
+/* 定型プロンプトのトリガー。タイトルを左に寄せ、アイコンとトグルを右側にまとめる。
+   メニューを絶対配置で吊るすため relative にする。 */
 .terminal-actions {
+  position: relative;
   margin-left: auto;
   margin-right: 6px;
   display: inline-flex;
-  gap: 4px;
 }
 
-/* よく使う Git 操作を Claude に送るボタン。view-toggle-btn に準じた控えめな見た目。 */
-.terminal-action-btn {
-  font-size: 10px;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--fg-dim);
-  background: transparent;
-  border: 1px solid var(--border);
+/* ヘッダーに置くアイコンボタン。押すと定型プロンプトのメニューを展開する。 */
+.terminal-action-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
   border-radius: 4px;
-  padding: 1px 8px;
+  background: transparent;
+  color: var(--fg-dim);
   cursor: pointer;
 }
 
-.terminal-action-btn:hover:not(:disabled) {
+.terminal-action-trigger:hover:not(:disabled),
+.terminal-action-trigger.open {
+  background: #333;
   color: var(--fg);
+}
+
+.terminal-action-trigger:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 展開されるメニュー本体。トリガーの直下・右寄せに吊るす。 */
+.terminal-action-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* メニュー項目。よく使う Git 操作を Claude に送る。 */
+.terminal-action-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.terminal-action-menu-item:hover:not(:disabled) {
   background: #333;
 }
 
-.terminal-action-btn:disabled {
+.terminal-action-menu-item:disabled {
   opacity: 0.4;
   cursor: default;
 }
@@ -194,8 +240,19 @@ body {
    .terminal-actions の外側に置くため、トグルとの間に余白を取る。 */
 .terminal-restart-btn {
   margin-right: 6px;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--fg);
-  border-color: #555;
+  background: transparent;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+
+.terminal-restart-btn:hover {
+  background: #333;
 }
 
 /* 開閉トグルのアイコンボタン。 */
