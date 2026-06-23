@@ -151,6 +151,48 @@ export function getActiveTabWebContents(): Electron.WebContents | null {
   return tab && !tab.view.webContents.isDestroyed() ? tab.view.webContents : null
 }
 
+// 全タブの webContents（破棄済みは除く）。レイアウト等を全タブに同報するのに使う。
+export function getAllTabWebContents(): Electron.WebContents[] {
+  return tabs.filter((t) => !t.view.webContents.isDestroyed()).map((t) => t.view.webContents)
+}
+
+// --- アプリメニュー（キーボードショートカット）から呼ぶタブ操作 ---
+
+// 新しいタブ（空）を作成する。⌘T。
+export function newTab(): void {
+  if (win) createTab()
+}
+
+// アクティブタブを閉じる。最後の 1 枚ならウィンドウを閉じる。⌘W。
+export function closeActiveTabOrWindow(): void {
+  if (tabs.length > 1) {
+    if (activeId !== null) closeTab(activeId)
+  } else {
+    win?.close()
+  }
+}
+
+// 0 始まりの位置でタブをアクティブにする（範囲外は無視）。⌘1..⌘8。
+export function activateTabByIndex(index: number): void {
+  const tab = tabs[index]
+  if (tab) activateTab(tab.id)
+}
+
+// 最後のタブをアクティブにする。⌘9。
+export function activateLastTab(): void {
+  const tab = tabs[tabs.length - 1]
+  if (tab) activateTab(tab.id)
+}
+
+// 現在位置から相対移動してタブを切り替える（末尾↔先頭は循環）。⌃Tab / ⌃⇧Tab。
+export function activateRelativeTab(delta: number): void {
+  if (tabs.length === 0 || activeId === null) return
+  const i = tabs.findIndex((t) => t.id === activeId)
+  if (i === -1) return
+  const n = (((i + delta) % tabs.length) + tabs.length) % tabs.length
+  activateTab(tabs[n].id)
+}
+
 // メインウィンドウとクロームシェル、初期タブを生成する。app ready 後に 1 度だけ呼ぶ。
 export function createMainWindow(): void {
   win = new BrowserWindow({

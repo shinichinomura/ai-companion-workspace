@@ -1,6 +1,14 @@
 import { app, Menu, ipcMain, type MenuItemConstructorOptions } from 'electron'
 import { IpcChannel, type WorkLayout } from '../shared/ipc'
-import { getActiveTabWebContents } from './tabs'
+import {
+  getActiveTabWebContents,
+  getAllTabWebContents,
+  newTab,
+  closeActiveTabOrWindow,
+  activateTabByIndex,
+  activateLastTab,
+  activateRelativeTab
+} from './tabs'
 
 // メニューに保持する現在のレイアウト（チェック状態の初期値）。
 // 実体の真値は renderer 側（localStorage）。起動時に renderer から通知されて同期される。
@@ -10,16 +18,18 @@ let currentLayout: WorkLayout = 'horizontal'
 // 実体の真値は renderer 側（localStorage）。起動時に renderer から通知されて同期される。
 let currentShowHidden = false
 
-// 表示メニューでレイアウトが選ばれたら、アクティブタブの renderer に通知する。
+// 表示メニューでレイアウトが選ばれたら、全タブの renderer に通知する。
+// 全タブは localStorage（同一 session）を共有するため、レイアウトはタブ間で共通。
+// 開いている全タブへ同報して、表示を一斉に揃える。
 function requestLayout(layout: WorkLayout): void {
   currentLayout = layout
-  getActiveTabWebContents()?.send(IpcChannel.SetWorkLayout, layout)
+  for (const wc of getAllTabWebContents()) wc.send(IpcChannel.SetWorkLayout, layout)
 }
 
-// 表示メニューで隠しファイルの表示が切り替えられたら、アクティブタブの renderer に通知する。
+// 表示メニューで隠しファイルの表示が切り替えられたら、全タブの renderer に通知する。
 function requestShowHidden(show: boolean): void {
   currentShowHidden = show
-  getActiveTabWebContents()?.send(IpcChannel.SetShowHidden, show)
+  for (const wc of getAllTabWebContents()) wc.send(IpcChannel.SetShowHidden, show)
 }
 
 // 「ファイル」メニューの「フォルダを開く」が選ばれたら、アクティブタブの renderer に通知する。
@@ -69,19 +79,31 @@ export function buildAppMenu(): void {
       label: 'ファイル',
       submenu: [
         {
+          label: '新しいタブ',
+          accelerator: 'CmdOrCtrl+T',
+          click: () => newTab()
+        },
+        {
           label: 'フォルダを開く',
           accelerator: 'CmdOrCtrl+O',
           click: () => requestOpenFolder()
         },
         { type: 'separator' },
-        // 非 Mac ではアプリメニューが無いため、設定をファイルメニューに置く。
+        {
+          // 最後の 1 枚のときはウィンドウを閉じる（= アプリ終了相当）。
+          label: 'タブを閉じる',
+          accelerator: 'CmdOrCtrl+W',
+          click: () => closeActiveTabOrWindow()
+        },
+        // 非 Mac ではアプリメニューが無いため、設定と終了をファイルメニューに置く。
         ...(!isMac
           ? [
+              { type: 'separator' as const },
               { label: '設定…', accelerator: 'CmdOrCtrl+,', click: () => openSettings() },
-              { type: 'separator' as const }
+              { type: 'separator' as const },
+              { role: 'quit' as const }
             ]
-          : []),
-        isMac ? { role: 'close' } : { role: 'quit' }
+          : [])
       ]
     },
     { role: 'editMenu' },
@@ -119,6 +141,28 @@ export function buildAppMenu(): void {
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'タブ',
+      submenu: [
+        {
+          label: '次のタブ',
+          accelerator: 'Control+Tab',
+          click: () => activateRelativeTab(1)
+        },
+        {
+          label: '前のタブ',
+          accelerator: 'Control+Shift+Tab',
+          click: () => activateRelativeTab(-1)
+        },
+        { type: 'separator' },
+        // ⌘1..⌘8 で位置指定、⌘9 で最後のタブ（ブラウザ慣習）。
+        ...Array.from({ length: 9 }, (_, i): MenuItemConstructorOptions => ({
+          label: `タブ ${i + 1}`,
+          accelerator: `CmdOrCtrl+${i + 1}`,
+          click: () => (i === 8 ? activateLastTab() : activateTabByIndex(i))
+        }))
       ]
     },
     { role: 'windowMenu' }
