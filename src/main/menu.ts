@@ -2,7 +2,6 @@ import { app, Menu, ipcMain, type MenuItemConstructorOptions } from 'electron'
 import { IpcChannel, type WorkLayout } from '../shared/ipc'
 import {
   getActiveTabWebContents,
-  getAllTabWebContents,
   newTab,
   closeActiveTabOrWindow,
   activateTabByIndex,
@@ -18,18 +17,18 @@ let currentLayout: WorkLayout = 'horizontal'
 // 実体の真値は renderer 側（localStorage）。起動時に renderer から通知されて同期される。
 let currentShowHidden = false
 
-// 表示メニューでレイアウトが選ばれたら、全タブの renderer に通知する。
-// 全タブは localStorage（同一 session）を共有するため、レイアウトはタブ間で共通。
-// 開いている全タブへ同報して、表示を一斉に揃える。
+// 表示メニューでレイアウトが選ばれたら、アクティブタブの renderer にのみ通知する。
+// 注: 全タブは localStorage（同一 session）を共有するため、保存値はタブ共通で、
+// 他の開いているタブは次回マウント時にこの値を引き継ぐ。即時の見た目変更は操作中のタブだけ。
 function requestLayout(layout: WorkLayout): void {
   currentLayout = layout
-  for (const wc of getAllTabWebContents()) wc.send(IpcChannel.SetWorkLayout, layout)
+  getActiveTabWebContents()?.send(IpcChannel.SetWorkLayout, layout)
 }
 
-// 表示メニューで隠しファイルの表示が切り替えられたら、全タブの renderer に通知する。
+// 表示メニューで隠しファイルの表示が切り替えられたら、アクティブタブの renderer にのみ通知する。
 function requestShowHidden(show: boolean): void {
   currentShowHidden = show
-  for (const wc of getAllTabWebContents()) wc.send(IpcChannel.SetShowHidden, show)
+  getActiveTabWebContents()?.send(IpcChannel.SetShowHidden, show)
 }
 
 // 「ファイル」メニューの「フォルダを開く」が選ばれたら、アクティブタブの renderer に通知する。
