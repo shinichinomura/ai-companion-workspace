@@ -6,6 +6,10 @@ import {
   type FsEventBatch,
   type OpenFolderByPathRequest,
   type OpenPathRequest,
+  type RenamePathRequest,
+  type DeletePathRequest,
+  type RevealPathRequest,
+  type CopyPathRequest,
   type ReadDirRequest,
   type ReadFileRequest,
   type TabsState,
@@ -27,6 +31,10 @@ const api: WorkspaceApi = {
   readFile: (req: ReadFileRequest) => ipcRenderer.invoke(IpcChannel.ReadFile, req),
   writeFile: (req: WriteFileRequest) => ipcRenderer.invoke(IpcChannel.WriteFile, req),
   openPath: (req: OpenPathRequest) => ipcRenderer.invoke(IpcChannel.OpenPath, req),
+  renamePath: (req: RenamePathRequest) => ipcRenderer.invoke(IpcChannel.RenamePath, req),
+  deletePath: (req: DeletePathRequest) => ipcRenderer.invoke(IpcChannel.DeletePath, req),
+  revealPath: (req: RevealPathRequest) => ipcRenderer.invoke(IpcChannel.RevealPath, req),
+  copyPath: (req: CopyPathRequest) => ipcRenderer.invoke(IpcChannel.CopyPath, req),
   onFsEvent: (cb: (batch: FsEventBatch) => void) => {
     const listener = (_e: unknown, batch: FsEventBatch): void => cb(batch)
     ipcRenderer.on(IpcChannel.FsEvent, listener)

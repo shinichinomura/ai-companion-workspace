@@ -12,6 +12,14 @@ export const IpcChannel = {
   WriteFile: 'workspace:write-file',
   // バイナリ/巨大ファイルを OS の既定アプリ（関連付け）で開く。
   OpenPath: 'workspace:open-path',
+  // ファイル/フォルダをリネームする。
+  RenamePath: 'workspace:rename-path',
+  // ファイル/フォルダをゴミ箱へ移動する（main 側で確認ダイアログを出す）。
+  DeletePath: 'workspace:delete-path',
+  // Finder で項目を表示する（shell.showItemInFolder）。
+  RevealPath: 'workspace:reveal-path',
+  // 項目の絶対パスをクリップボードにコピーする。
+  CopyPath: 'workspace:copy-path',
   // main → renderer への push。file watcher が検知した変更を通知する。
   FsEvent: 'workspace:fs-event',
   // R→M invoke: 現在の project root の Git status（追加/変更/削除）を取得する。
@@ -205,6 +213,36 @@ export interface OpenPathRequest {
   relPath: string
 }
 
+// renamePath のリクエスト。relPath は対象（root 相対）、newName は同階層での新しい名前。
+export interface RenamePathRequest {
+  relPath: string
+  newName: string
+}
+
+// renamePath の結果。relPath はリネーム後の新しい root 相対パス。
+export interface RenamePathResult {
+  relPath: string
+}
+
+// deletePath のリクエスト。relPath は対象（root 相対）。
+export interface DeletePathRequest {
+  relPath: string
+}
+
+// deletePath の結果。deleted はゴミ箱へ移動したか（false はユーザーが確認ダイアログでキャンセル）。
+export interface DeletePathResult {
+  deleted: boolean
+}
+
+// revealPath / copyPath のリクエスト。relPath は対象（root 相対）。
+export interface RevealPathRequest {
+  relPath: string
+}
+
+export interface CopyPathRequest {
+  relPath: string
+}
+
 // file watcher が検知した 1 件の変更。relPath は project root からの相対パス（'/' 区切り）。
 export type FsChangeKind = 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir'
 
@@ -253,6 +291,14 @@ export interface WorkspaceApi {
   writeFile: (req: WriteFileRequest) => Promise<WriteFileResult>
   // バイナリ/巨大ファイルを OS の既定アプリで開く。戻り値は失敗時のエラーメッセージ（成功時は空文字）。
   openPath: (req: OpenPathRequest) => Promise<string>
+  // ファイル/フォルダをリネームする。新しい root 相対パスを返す。失敗時は例外。
+  renamePath: (req: RenamePathRequest) => Promise<RenamePathResult>
+  // ファイル/フォルダをゴミ箱へ移動する。main 側で確認ダイアログを出す。
+  deletePath: (req: DeletePathRequest) => Promise<DeletePathResult>
+  // Finder で項目を表示する。
+  revealPath: (req: RevealPathRequest) => Promise<void>
+  // 項目の絶対パスをクリップボードにコピーする。コピーしたパスを返す。
+  copyPath: (req: CopyPathRequest) => Promise<string>
   // file watcher の変更通知を購読する。返り値は購読解除関数。
   onFsEvent: (cb: (batch: FsEventBatch) => void) => () => void
   // 現在の project root の Git status を取得する。非リポジトリなら isRepo=false。

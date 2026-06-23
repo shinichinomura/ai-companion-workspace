@@ -474,6 +474,55 @@ body {
   color: #e2c08d;
 }
 
+/* リネーム時のインライン入力欄。ラベルとほぼ同じ位置・サイズに収める。 */
+.tree-rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  padding: 0 2px;
+  margin: 0;
+  outline: none;
+}
+
+/* 右クリックメニュー。オーバーレイで画面外クリックを拾って閉じる。 */
+.context-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.context-menu {
+  position: fixed;
+  min-width: 160px;
+  padding: 4px 0;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 5px 14px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.context-menu-item:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
 /* エディタ */
 .editor-body {
   padding: 0;

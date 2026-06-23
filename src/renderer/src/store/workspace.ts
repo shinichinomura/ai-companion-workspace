@@ -136,6 +136,9 @@ interface WorkspaceState {
   reloadActiveFromDisk: () => Promise<void>
   // 外部変更の衝突通知を閉じる（自分の編集を保持する）。
   dismissExternalChange: () => void
+  // ファイル/フォルダをリネームする。開いているファイルが対象（配下含む）なら追従させる。
+  // ツリー自体は file watcher の変更通知で更新される。
+  renamePath: (relPath: string, newName: string) => Promise<void>
   // 隠しファイルの表示設定を切り替える（localStorage にも保存する）。
   setShowHidden: (show: boolean) => void
   // Git status を main から取得し直してツリー表示に反映する。
@@ -356,6 +359,22 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const active = get().activeFile
     if (!active) return
     set({ activeFile: { ...active, externallyChanged: false, externallyDeleted: false } })
+  },
+
+  // ファイル/フォルダをリネームする。
+  // 開いているファイルがリネーム対象そのもの、またはリネームしたフォルダ配下なら relPath を付け替える。
+  renamePath: async (relPath: string, newName: string) => {
+    const result = await window.api.renamePath({ relPath, newName })
+    const active = get().activeFile
+    if (!active) return
+    if (active.relPath === relPath) {
+      // 対象ファイルそのものを開いていた場合は新しいパス・名前に追従する。
+      set({ activeFile: { ...active, relPath: result.relPath, name: newName } })
+    } else if (active.relPath.startsWith(`${relPath}/`)) {
+      // リネームしたフォルダ配下のファイルを開いていた場合は接頭辞を付け替える。
+      const suffix = active.relPath.slice(relPath.length)
+      set({ activeFile: { ...active, relPath: `${result.relPath}${suffix}` } })
+    }
   },
 
   // 隠しファイルの表示設定を切り替える（現在のプロジェクト root のキーに保存する）。

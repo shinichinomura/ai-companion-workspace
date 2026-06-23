@@ -1,4 +1,4 @@
-import { dialog, ipcMain, shell, protocol, BrowserWindow, type WebContents } from 'electron'
+import { clipboard, dialog, ipcMain, shell, protocol, BrowserWindow, type WebContents } from 'electron'
 import { promises as fs } from 'fs'
 import { basename, extname, join, normalize, relative, sep } from 'path'
 import chokidar, { type FSWatcher } from 'chokidar'
@@ -16,7 +16,13 @@ import {
   type ReadFileResult,
   type WriteFileRequest,
   type WriteFileResult,
-  type OpenPathRequest
+  type OpenPathRequest,
+  type RenamePathRequest,
+  type RenamePathResult,
+  type DeletePathRequest,
+  type DeletePathResult,
+  type RevealPathRequest,
+  type CopyPathRequest
 } from '../shared/ipc'
 import { addRecentFolder, loadRecentFolders, removeRecentFolder } from './settings'
 import { startGitWatching, stopGitWatching } from './git'
@@ -376,6 +382,86 @@ async function handleOpenPath(
   return shell.openPath(abs)
 }
 
+// relPath の親ディレクトリ（root 相対・'/' 区切り。トップレベルは ''）。
+function parentRelDir(relPath: string): string {
+  const idx = relPath.lastIndexOf('/')
+  return idx === -1 ? '' : relPath.slice(0, idx)
+}
+
+// ファイル/フォルダを同階層でリネームする。新しい root 相対パスを返す。
+// newName にパス区切りを含む（= 別階層への移動）場合は拒否する。
+async function handleRenamePath(
+  e: Electron.IpcMainInvokeEvent,
+  req: RenamePathRequest
+): Promise<RenamePathResult> {
+  const newName = req.newName.trim()
+  if (!newName || newName.includes('/') || newName.includes('\\')) {
+    throw new Error(`不正な名前です: ${req.newName}`)
+  }
+  const abs = resolveWithinRoot(e.sender.id, req.relPath)
+  const parent = parentRelDir(req.relPath)
+  const newRel = parent ? `${parent}/${newName}` : newName
+  const newAbs = resolveWithinRoot(e.sender.id, newRel)
+  // 同名の項目が既にある場合は上書きせず拒否する。
+  let exists = true
+  try {
+    await fs.access(newAbs)
+  } catch {
+    exists = false
+  }
+  if (exists) {
+    throw new Error(`同名の項目が既に存在します: ${newName}`)
+  }
+  await fs.rename(abs, newAbs)
+  return { relPath: newRel }
+}
+
+// ファイル/フォルダをゴミ箱へ移動する。実行前に確認ダイアログを出す（spec / Mac 固有の注意点）。
+// shell.trashItem を使うため、ユーザーはゴミ箱から元に戻せる。
+async function handleDeletePath(
+  e: Electron.IpcMainInvokeEvent,
+  req: DeletePathRequest
+): Promise<DeletePathResult> {
+  const abs = resolveWithinRoot(e.sender.id, req.relPath)
+  const name = basename(abs)
+  const win = BrowserWindow.fromWebContents(e.sender)
+  const options: Electron.MessageBoxOptions = {
+    type: 'warning',
+    buttons: ['ゴミ箱に移動', 'キャンセル'],
+    defaultId: 0,
+    cancelId: 1,
+    message: `「${name}」をゴミ箱に移動しますか？`,
+    detail: 'ゴミ箱から元に戻せます。'
+  }
+  const { response } = win
+    ? await dialog.showMessageBox(win, options)
+    : await dialog.showMessageBox(options)
+  if (response !== 0) {
+    return { deleted: false }
+  }
+  await shell.trashItem(abs)
+  return { deleted: true }
+}
+
+// Finder で項目を表示する（親フォルダを開いて当該項目を選択する）。
+async function handleRevealPath(
+  e: Electron.IpcMainInvokeEvent,
+  req: RevealPathRequest
+): Promise<void> {
+  const abs = resolveWithinRoot(e.sender.id, req.relPath)
+  shell.showItemInFolder(abs)
+}
+
+// 項目の絶対パスをクリップボードにコピーする。コピーしたパスを返す。
+async function handleCopyPath(
+  e: Electron.IpcMainInvokeEvent,
+  req: CopyPathRequest
+): Promise<string> {
+  const abs = resolveWithinRoot(e.sender.id, req.relPath)
+  clipboard.writeText(abs)
+  return abs
+}
+
 // workspace 関連の IPC ハンドラを登録する。app 起動後に 1 度だけ呼ぶ。
 export function registerWorkspaceHandlers(): void {
   ipcMain.handle(IpcChannel.OpenFolder, handleOpenFolder)
@@ -385,6 +471,10 @@ export function registerWorkspaceHandlers(): void {
   ipcMain.handle(IpcChannel.ReadFile, handleReadFile)
   ipcMain.handle(IpcChannel.WriteFile, handleWriteFile)
   ipcMain.handle(IpcChannel.OpenPath, handleOpenPath)
+  ipcMain.handle(IpcChannel.RenamePath, handleRenamePath)
+  ipcMain.handle(IpcChannel.DeletePath, handleDeletePath)
+  ipcMain.handle(IpcChannel.RevealPath, handleRevealPath)
+  ipcMain.handle(IpcChannel.CopyPath, handleCopyPath)
 }
 
 // アプリ終了時などに全タブの watcher を後始末する。
