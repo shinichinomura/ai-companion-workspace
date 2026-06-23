@@ -51,6 +51,17 @@ Claude Code を使ったローカルプロジェクト作業を支援する **Ma
 - **コミットのタイミングは Claude の判断に任せる**。区切りのよい単位（ステップ完了・機能単位など）で都度コミットしてよく、毎回ユーザーに確認を取る必要はない。
 - コミットメッセージは日本語で、何をなぜ変えたかが分かるように書く。
 
+## バージョニング
+
+インストール済みアプリがどのビルドかを把握できるよう、版を運用・可視化する。
+
+- **方針（0.x 期）**: ユーザー影響のある変更（機能追加・バグ修正・使い勝手改善）を加えたら [package.json](package.json) の **patch を +1** する（`0.0.2` → `0.0.3`）。大きな節目でのみ minor を上げる。`npm version patch`（git tag も打つ）か、他の変更とまとめてコミットするなら手で書き換える。
+- **可視化**: 動作中のアプリでは以下で版が分かる。
+  - タブストリップ右端に `v0.0.x` を常時表示（ツールチップに git ハッシュ + ビルド日時）。[Shell.tsx](src/renderer/src/shell/Shell.tsx)
+  - macOS の「Atelier について」（アプリメニュー）に version / git ハッシュ / ビルド日時。[src/main/index.ts](src/main/index.ts)
+- **ビルド時定数**: version・git 短縮ハッシュ・ビルド日時は [electron.vite.config.ts](electron.vite.config.ts) が `define` でビルド時に焼き込む（試用版 `.app` には `.git` が無く起動後に git を引けないため）。参照は [src/shared/build-info.ts](src/shared/build-info.ts)、型宣言は [src/shared/build-globals.d.ts](src/shared/build-globals.d.ts)。
+- **試用フロー**: `npm run trial:install` でビルドすればその瞬間のハッシュ・日時が埋まる。patch を上げ忘れても、ハッシュ + 日時でどのコミットの版かは一意に特定できる。
+
 ## セッション運用
 
 - **新しいセッションに切り替えるタイミングは Claude が判断して提案する**。会話が長くなった・大きな区切り（ステップ完了）に達した・コンテキストが膨らんできた、といった節目で「ここで新セッションにしませんか」と提案する。

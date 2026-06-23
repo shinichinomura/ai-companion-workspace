@@ -150,3 +150,16 @@ body {
   background: var(--bg-pane);
   color: var(--fg);
 }
+
+/* 動作中ビルドのバージョン表示。タブバー右端に控えめに置く。 */
+.shell-version {
+  -webkit-app-region: no-drag;
+  margin-left: auto;
+  align-self: center;
+  padding: 0 12px;
+  color: var(--fg-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: default;
+}

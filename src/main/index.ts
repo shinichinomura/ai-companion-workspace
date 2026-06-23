@@ -14,6 +14,7 @@ import { registerAppSettingsHandlers } from './app-settings'
 import { buildAppMenu, refreshRecentMenu, registerMenuHandlers } from './menu'
 import { createMainWindow, registerTabHandlers, getActiveTabRoot } from './tabs'
 import { MEDIA_SCHEME } from '../shared/ipc'
+import { APP_GIT_HASH, buildDetail } from '../shared/build-info'
 
 // 開発(HMR)と試用(ビルド版)で永続データ（recent-workspaces.json 等）が混ざらないよう、
 // 開発時だけ userData ディレクトリを分ける。
@@ -35,6 +36,16 @@ protocol.registerSchemesAsPrivileged([
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.nomura.atelier')
+
+  // macOS 標準の About パネル（アプリメニュー「Atelier について」）に版情報を出す。
+  // applicationVersion は package.json の version（app.getVersion）、
+  // version 行に git ハッシュ + ビルド日時を入れ、どのビルドかを一意に特定できるようにする。
+  app.setAboutPanelOptions({
+    applicationName: 'Atelier',
+    applicationVersion: app.getVersion(),
+    version: buildDetail(),
+    copyright: `git ${APP_GIT_HASH}`
+  })
 
   // 開発(HMR)では electron-vite が Electron を直接起動するため、パッケージ版の
   // build/icon.icns が Dock に反映されず素の Electron アイコンが出てしまう。

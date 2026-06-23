@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { TabsState } from '../../../shared/ipc'
+import { APP_VERSION, buildDetail } from '../../../shared/build-info'
 
 // クロームシェル本体。タブバーを描画し、タブの新規作成・切替・クローズを main に依頼する。
 // タブの状態（一覧・アクティブ）は main が真値として持ち、tabs:state push で受け取る。
@@ -53,6 +54,10 @@ function Shell(): JSX.Element {
       <button className="tab-new" title="新しいタブ" onClick={() => window.api.newTab()}>
         +
       </button>
+      {/* 動いているビルドのバージョン。ツールチップに git ハッシュ + ビルド日時を出す。 */}
+      <div className="shell-version" title={`ビルド: ${buildDetail()}`}>
+        v{APP_VERSION}
+      </div>
     </div>
   )
 }
