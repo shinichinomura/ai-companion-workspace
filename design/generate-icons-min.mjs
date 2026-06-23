@@ -115,7 +115,7 @@ async function main() {
   const html = `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Atelier アイコン候補 — ミニマル版</title>
+<title>Noetelier アイコン候補 — ミニマル版</title>
 <style>
   :root { color-scheme: dark; }
   body { margin:0; padding:32px; background:#15171c; color:#e6e8ec;
@@ -138,7 +138,7 @@ async function main() {
     color:#ff8a8a; border:1px dashed #ff8a8a55; }
 </style></head>
 <body>
-  <h1>Atelier アイコン候補 — ミニマル版（C-3 ベース）</h1>
+  <h1>Noetelier アイコン候補 — ミニマル版（C-3 ベース）</h1>
   <p class="note">各カード下の 64 / 32 / 16 は Dock 実サイズでの見え方の目安。小さくしてもごちゃつかないかで判断してください。元の6案は <a href="index.html" style="color:#36d2c5">index.html</a>。</p>
   <div class="grid">
 ${cards}

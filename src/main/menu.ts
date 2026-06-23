@@ -121,7 +121,7 @@ export function buildAppMenu(): void {
   const isMac = process.platform === 'darwin'
 
   const template: MenuItemConstructorOptions[] = [
-    // macOS のアプリメニュー（Atelier について / 設定… / 終了 など）。
+    // macOS のアプリメニュー（Noetelier について / 設定… / 終了 など）。
     // 「設定…」（⌘,）を挟むため role:'appMenu' を使わず手組みする。
     ...(isMac
       ? [

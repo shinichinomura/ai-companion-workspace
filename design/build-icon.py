@@ -89,9 +89,9 @@ imgs = "".join(
     for s in prev_sizes
 )
 html = f"""<!doctype html><meta charset=utf-8>
-<title>Atelier icon preview</title>
+<title>Noetelier icon preview</title>
 <body style="margin:0;padding:32px;background:#15171c;color:#e6e8ec;font-family:-apple-system,'Hiragino Sans',sans-serif">
-<h1 style="font-size:18px">Atelier アプリアイコン（tb-narrow-left を加工）</h1>
+<h1 style="font-size:18px">Noetelier アプリアイコン（tb-narrow-left を加工）</h1>
 <p style="color:#9aa0aa;font-size:13px">透明背景に加工済み。下は各サイズの見え方。</p>
 <div style="display:flex;gap:28px;align-items:flex-end;margin-top:20px;text-align:center;color:#9aa0aa;font-size:12px;
   background:repeating-conic-gradient(#2a2d34 0 25%,#23262c 0 50%) 50%/24px 24px;padding:24px;border-radius:12px">

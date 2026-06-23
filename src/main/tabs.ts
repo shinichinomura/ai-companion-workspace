@@ -195,7 +195,7 @@ function handleTerminalBell(wcId: number): void {
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
-    // 別アプリにフォーカスがある場合に Atelier を前面化する（macOS）。
+    // 別アプリにフォーカスがある場合に Noetelier を前面化する（macOS）。
     if (process.platform === 'darwin') app.focus({ steal: true })
     activateTab(wcId)
   })

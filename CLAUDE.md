@@ -7,7 +7,7 @@
 Claude Code を使ったローカルプロジェクト作業を支援する **Mac 向け Electron デスクトップアプリ**。
 ファイルエクスプローラー + エディタ/ビューワー + Markdown プレビュー + 統合ターミナルの 3 ペイン構成。
 
-アプリ名は **Atelier**（仮）。bundle id は `com.nomura.atelier`。
+アプリ名は **Noetelier**（ノエトリエ。Noēsis〈希: 思惟〉+ Atelier =「思惟の工房」）。bundle id は `com.nomura.noetelier`。
 
 **設計の核**: Claude Code を隠れた AI バックエンドとして扱わない。ユーザーが統合ターミナルで `claude` CLI を直接操作し、本アプリはファイルシステム経由でその結果を可視化するだけ。
 
@@ -58,7 +58,7 @@ Claude Code を使ったローカルプロジェクト作業を支援する **Ma
 - **方針（0.x 期）**: ユーザー影響のある変更（機能追加・バグ修正・使い勝手改善）を加えたら [package.json](package.json) の **patch を +1** する（`0.0.2` → `0.0.3`）。大きな節目でのみ minor を上げる。`npm version patch`（git tag も打つ）か、他の変更とまとめてコミットするなら手で書き換える。
 - **可視化**: 動作中のアプリでは以下で版が分かる。
   - タブストリップ右端に `v0.0.x` を常時表示（ツールチップに git ハッシュ + ビルド日時）。[Shell.tsx](src/renderer/src/shell/Shell.tsx)
-  - macOS の「Atelier について」（アプリメニュー）に version / git ハッシュ / ビルド日時。[src/main/index.ts](src/main/index.ts)
+  - macOS の「Noetelier について」（アプリメニュー）に version / git ハッシュ / ビルド日時。[src/main/index.ts](src/main/index.ts)
 - **ビルド時定数**: version・git 短縮ハッシュ・ビルド日時は [electron.vite.config.ts](electron.vite.config.ts) が `define` でビルド時に焼き込む（試用版 `.app` には `.git` が無く起動後に git を引けないため）。参照は [src/shared/build-info.ts](src/shared/build-info.ts)、型宣言は [src/shared/build-globals.d.ts](src/shared/build-globals.d.ts)。
 - **試用フロー**: `npm run trial:install` でビルドすればその瞬間のハッシュ・日時が埋まる。patch を上げ忘れても、ハッシュ + 日時でどのコミットの版かは一意に特定できる。
 
@@ -82,12 +82,12 @@ Claude Code を使ったローカルプロジェクト作業を支援する **Ma
 開発（コードを書く）と試用（実用性を確認する）を明確に分け、両者を混ぜない。
 
 - **開発**: `npm run dev`（HMR）で起動する。
-- **試用**: `npm run trial:install` でパッケージして `/Applications/Atelier.app` に上書きインストールし、そこに置いた `.app` を Finder / Dock から起動して実アプリとして使う。`dist/` から直接起動しない（再ビルドで作り直されるため Dock 参照が不安定になる）。Dock には必ず `/Applications/Atelier.app` を登録する。
+- **試用**: `npm run trial:install` でパッケージして `/Applications/Noetelier.app` に上書きインストールし、そこに置いた `.app` を Finder / Dock から起動して実アプリとして使う。`dist/` から直接起動しない（再ビルドで作り直されるため Dock 参照が不安定になる）。Dock には必ず `/Applications/Noetelier.app` を登録する。
 
-両者は **永続データ（最近開いたフォルダ等）を別ディレクトリで管理**するため混ざらない（[src/main/index.ts](src/main/index.ts) 参照）。userData 名は productName（Atelier）に由来する。
+両者は **永続データ（最近開いたフォルダ等）を別ディレクトリで管理**するため混ざらない（[src/main/index.ts](src/main/index.ts) 参照）。userData 名は productName（Noetelier）に由来する。
 
-- 開発時の userData: `…/Application Support/Atelier-dev`
-- 試用版（ビルド版）の userData: `…/Application Support/Atelier`
+- 開発時の userData: `…/Application Support/Noetelier-dev`
+- 試用版（ビルド版）の userData: `…/Application Support/Noetelier`
 - 判定は electron-vite dev のみ設定する `ELECTRON_RENDERER_URL` の有無で行う。
 - ペイン幅などの localStorage は origin（`http://localhost` と `file://`）が異なるため自動的に分離される。
 

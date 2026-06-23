@@ -1,4 +1,4 @@
-// Atelier アプリアイコン候補を Nano Banana 2 (Gemini 3 Pro Image) で生成するスクリプト。
+// Noetelier アプリアイコン候補を Nano Banana 2 (Gemini 3 Pro Image) で生成するスクリプト。
 // C-3 案（デスク俯瞰の3ペイン＋光るターミナル行）のバリエーションをまとめて生成し、
 // PNG として保存したうえで一覧用の index.html を書き出す。
 import { readFileSync, writeFileSync } from "node:fs";
@@ -120,7 +120,7 @@ async function main() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Atelier アイコン候補 (C-3)</title>
+<title>Noetelier アイコン候補 (C-3)</title>
 <style>
   :root { color-scheme: dark; }
   body { margin: 0; padding: 32px; background: #15171c; color: #e6e8ec;
@@ -143,7 +143,7 @@ async function main() {
 </style>
 </head>
 <body>
-  <h1>Atelier アプリアイコン候補 — C-3（デスク俯瞰 × 光るターミナル行）</h1>
+  <h1>Noetelier アプリアイコン候補 — C-3（デスク俯瞰 × 光るターミナル行）</h1>
   <p class="note">Nano Banana 2 (Gemini 3 Pro Image) で生成。macOS の squircle に内接する想定でプレビュー表示しています。</p>
   <div class="grid">
 ${cards}

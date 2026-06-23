@@ -35,13 +35,13 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.nomura.atelier')
+  electronApp.setAppUserModelId('com.nomura.noetelier')
 
-  // macOS 標準の About パネル（アプリメニュー「Atelier について」）に版情報を出す。
+  // macOS 標準の About パネル（アプリメニュー「Noetelier について」）に版情報を出す。
   // applicationVersion は package.json の version（app.getVersion）、
   // version 行に git ハッシュ + ビルド日時を入れ、どのビルドかを一意に特定できるようにする。
   app.setAboutPanelOptions({
-    applicationName: 'Atelier',
+    applicationName: 'Noetelier',
     applicationVersion: app.getVersion(),
     version: buildDetail(),
     copyright: `git ${APP_GIT_HASH}`

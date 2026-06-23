@@ -115,7 +115,7 @@ async function main() {
   const html = `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Atelier アイコン候補 — twoblock 2分割詰め</title>
+<title>Noetelier アイコン候補 — twoblock 2分割詰め</title>
 <style>
   :root { color-scheme: dark; }
   body { margin:0; padding:32px; background:#15171c; color:#e6e8ec;
@@ -138,7 +138,7 @@ async function main() {
     color:#ff8a8a; border:1px dashed #ff8a8a55; }
 </style></head>
 <body>
-  <h1>Atelier アイコン候補 — twoblock 2分割（左狭）の詰め</h1>
+  <h1>Noetelier アイコン候補 — twoblock 2分割（左狭）の詰め</h1>
   <p class="note">上部を 2 分割（左ペインを狭く）に変更。分割線の視認性を上げる方向で、シーム強度とトーン差を振っています。64/32/16 は Dock 実サイズの目安。前段は <a href="index-min.html" style="color:#36d2c5">index-min.html</a>。</p>
   <div class="grid">
 ${cards}

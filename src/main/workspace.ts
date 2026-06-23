@@ -325,7 +325,7 @@ function getRootForMedia(): string | null {
 }
 
 // MEDIA_SCHEME のリクエストを処理し、project root 内の画像ファイルを返す。
-// URL は mediaUrl() が生成する `atelier-img://r/<encoded relPath>` 形式。
+// URL は mediaUrl() が生成する `noetelier-img://r/<encoded relPath>` 形式。
 // project root 外・存在しない・非画像・フォルダ未選択はいずれもエラー応答にする。
 async function handleMediaRequest(request: Request): Promise<Response> {
   try {
