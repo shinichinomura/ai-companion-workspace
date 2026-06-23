@@ -57,6 +57,19 @@ const watchByWcId = new Map<number, WatchState>()
 // destroyed リスナーを二重登録しないための記録。
 const cleanupBound = new Set<number>()
 
+// project root が変わったときの通知先（タブのタイトル更新に使う）。tabs.ts が登録する。
+let rootChangedCb: ((wcId: number, root: string | null) => void) | null = null
+export function setRootChangedListener(cb: (wcId: number, root: string | null) => void): void {
+  rootChangedCb = cb
+}
+
+// メディアプロトコルが解決に使う root を返す getter。tabs.ts が「アクティブタブの root」を登録する。
+// 媒体ハンドラは送信元 webContents を取れないため、表示中タブの root で解決する。
+let activeRootResolver: (() => string | null) | null = null
+export function setActiveRootResolver(fn: () => string | null): void {
+  activeRootResolver = fn
+}
+
 // 絶対パスを root 相対・'/' 区切りに正規化する。
 function toRelPath(root: string, absPath: string): string {
   return relative(root, absPath).split(sep).join('/')
@@ -176,6 +189,8 @@ async function openRoot(
   // 新しい root の監視を開始する（このタブの前の root の watcher は張り替えで閉じる）。
   await startWatching(root, target)
   await addRecentFolder(root)
+  // タブのタイトルを更新する（renderer 改修なしで反映）。
+  rootChangedCb?.(target.id, root)
   // タブ（webContents）の破棄時に root と監視を解放する。1 タブにつき 1 度だけ束ねる。
   if (!cleanupBound.has(target.id)) {
     cleanupBound.add(target.id)
@@ -299,19 +314,13 @@ const IMAGE_MIME: Record<string, string> = {
 
 // メディアリクエストの解決に使う project root を返す。
 // 媒体プロトコルのハンドラは送信元 webContents を受け取れないため、
-// フォーカス中のウィンドウの root を使う。単一登録（単一タブ）ならそれを使う。
-// 注: Phase 2 で各タブビューを専用 session に分離し、session 単位でハンドラを
-// 登録する方式に置き換える。WebContentsView 化後はフォーカス＝クロームシェルに
-// なるため、この heuristic ではタブを特定できなくなる。
+// 表示中（アクティブ）のタブの root で解決する（tabs.ts が resolver を登録する）。
+// 全タブビューは同一 session を共有し URL に root を含めないため、別タブの同名
+// パスとキャッシュが衝突しないよう、レスポンスは cache-control: no-store にする。
 function getRootForMedia(): string | null {
-  const focused = BrowserWindow.getFocusedWindow()
-  if (focused) {
-    const r = rootByWcId.get(focused.webContents.id)
-    if (r !== undefined) return r
-  }
-  if (rootByWcId.size === 1) {
-    return [...rootByWcId.values()][0]
-  }
+  if (activeRootResolver) return activeRootResolver()
+  // resolver 未登録時（タブ機構の起動前）の安全側フォールバック。
+  if (rootByWcId.size === 1) return [...rootByWcId.values()][0]
   return null
 }
 
@@ -337,7 +346,11 @@ async function handleMediaRequest(request: Request): Promise<Response> {
     if (!stat.isFile()) return new Response(null, { status: 404 })
 
     const buf = await fs.readFile(abs)
-    return new Response(buf, { headers: { 'content-type': mime } })
+    // 全タブが同一 session を共有するため、別タブの同名パスとキャッシュが衝突しないよう
+    // キャッシュを無効化する（root は URL に含めず、アクティブタブで解決するため）。
+    return new Response(buf, {
+      headers: { 'content-type': mime, 'cache-control': 'no-store' }
+    })
   } catch {
     return new Response(null, { status: 404 })
   }

@@ -1,5 +1,6 @@
-import { app, Menu, BrowserWindow, ipcMain, type MenuItemConstructorOptions } from 'electron'
+import { app, Menu, ipcMain, type MenuItemConstructorOptions } from 'electron'
 import { IpcChannel, type WorkLayout } from '../shared/ipc'
+import { getActiveTabWebContents } from './tabs'
 
 // メニューに保持する現在のレイアウト（チェック状態の初期値）。
 // 実体の真値は renderer 側（localStorage）。起動時に renderer から通知されて同期される。
@@ -9,31 +10,27 @@ let currentLayout: WorkLayout = 'horizontal'
 // 実体の真値は renderer 側（localStorage）。起動時に renderer から通知されて同期される。
 let currentShowHidden = false
 
-// 表示メニューでレイアウトが選ばれたら renderer に通知する。
+// 表示メニューでレイアウトが選ばれたら、アクティブタブの renderer に通知する。
 function requestLayout(layout: WorkLayout): void {
   currentLayout = layout
-  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-  win?.webContents.send(IpcChannel.SetWorkLayout, layout)
+  getActiveTabWebContents()?.send(IpcChannel.SetWorkLayout, layout)
 }
 
-// 表示メニューで隠しファイルの表示が切り替えられたら renderer に通知する。
+// 表示メニューで隠しファイルの表示が切り替えられたら、アクティブタブの renderer に通知する。
 function requestShowHidden(show: boolean): void {
   currentShowHidden = show
-  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-  win?.webContents.send(IpcChannel.SetShowHidden, show)
+  getActiveTabWebContents()?.send(IpcChannel.SetShowHidden, show)
 }
 
-// 「ファイル」メニューの「フォルダを開く」が選ばれたら renderer に通知する。
+// 「ファイル」メニューの「フォルダを開く」が選ばれたら、アクティブタブの renderer に通知する。
 // 実際のフォルダ選択ダイアログは renderer（既存の openFolder フロー）が開く。
 function requestOpenFolder(): void {
-  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-  win?.webContents.send(IpcChannel.RequestOpenFolder)
+  getActiveTabWebContents()?.send(IpcChannel.RequestOpenFolder)
 }
 
-// 「設定…」が選ばれたら renderer に通知する。設定モーダルは renderer 側で開く。
+// 「設定…」が選ばれたら、アクティブタブの renderer に通知する。設定モーダルは renderer 側で開く。
 function openSettings(): void {
-  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-  win?.webContents.send(IpcChannel.OpenSettings)
+  getActiveTabWebContents()?.send(IpcChannel.OpenSettings)
 }
 
 // アプリケーションメニュー（ネイティブのメニューバー）を構築・適用する。

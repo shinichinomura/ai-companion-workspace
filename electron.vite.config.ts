@@ -26,7 +26,11 @@ export default defineConfig({
     root: resolve(__dirname, 'src/renderer'),
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, 'src/renderer/index.html') }
+        // index: 各タブの本体（3 ペイン）。shell: タブバー（クロームシェル）。
+        input: {
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          shell: resolve(__dirname, 'src/renderer/shell.html')
+        }
       }
     },
     resolve: {

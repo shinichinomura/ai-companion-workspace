@@ -1,0 +1,152 @@
+/* クロームシェル（タブバー）専用スタイル。本体（main.css）とは独立。 */
+:root {
+  --bg: #1e1e1e;
+  --bg-elev: #252526;
+  --bg-pane: #2d2d2d;
+  --border: #333;
+  --fg: #d4d4d4;
+  --fg-dim: #888;
+  --accent: #0a84ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg-elev);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* タブバー全体。帯をドラッグ領域にしてウィンドウ移動できるようにする。
+   左は信号機ボタン（trafficLightPosition）と重ならないよう余白を確保する。 */
+.tabbar {
+  /* main の STRIP_H（タブストリップ高さ）と一致させる。残りはタブビューが覆う。 */
+  height: 38px;
+  display: flex;
+  align-items: stretch;
+  padding-left: 78px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+
+/* タブ・ボタンはドラッグ対象から除外する。 */
+.tab,
+.tab-close,
+.tab-new {
+  -webkit-app-region: no-drag;
+}
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  max-width: 220px;
+  min-width: 90px;
+  padding: 0 8px 0 12px;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: default;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  background: var(--bg-pane);
+}
+
+.tab.active {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.tab-title {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 未保存（dirty）マーク。Phase 5 で実装予定の枠だけ用意する。 */
+.tab-dirty {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-dim);
+}
+
+.tab-close {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: default;
+  visibility: hidden;
+}
+
+.tab:hover .tab-close,
+.tab.active .tab-close {
+  visibility: visible;
+}
+
+.tab-close:hover {
+  background: #ffffff22;
+  color: var(--fg);
+}
+
+.tab-new {
+  flex: 0 0 auto;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 18px;
+  line-height: 1;
+  cursor: default;
+}
+
+.tab-new:hover {
+  background: var(--bg-pane);
+  color: var(--fg);
+}

@@ -8,6 +8,7 @@ import {
   type OpenPathRequest,
   type ReadDirRequest,
   type ReadFileRequest,
+  type TabsState,
   type TerminalExit,
   type TerminalResizeRequest,
   type TerminalStartRequest,
@@ -81,7 +82,18 @@ const api: WorkspaceApi = {
   },
   // drag & drop された File から OS 上の絶対パスを得る。
   // Electron 32+ では File.path が廃止されたため webUtils を使う（renderer から直接は触れない）。
-  getPathForFile: (file: File) => webUtils.getPathForFile(file)
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+
+  // --- タブバー（クロームシェル）専用 ---
+  onTabsState: (cb: (state: TabsState) => void) => {
+    const listener = (_e: unknown, state: TabsState): void => cb(state)
+    ipcRenderer.on(IpcChannel.TabsState, listener)
+    return () => ipcRenderer.removeListener(IpcChannel.TabsState, listener)
+  },
+  requestTabsState: () => ipcRenderer.send(IpcChannel.TabsRequestState),
+  newTab: () => ipcRenderer.send(IpcChannel.TabNew),
+  activateTab: (id: number) => ipcRenderer.send(IpcChannel.TabActivate, id),
+  closeTab: (id: number) => ipcRenderer.send(IpcChannel.TabClose, id)
 }
 
 // contextIsolation が有効なため、contextBridge 経由でのみ公開する。

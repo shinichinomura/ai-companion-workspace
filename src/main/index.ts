@@ -1,16 +1,18 @@
-import { app, shell, BrowserWindow, protocol } from 'electron'
+import { app, BrowserWindow, protocol } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { electronApp, optimizer } from '@electron-toolkit/utils'
 import {
   registerWorkspaceHandlers,
   registerMediaProtocol,
+  setActiveRootResolver,
   disposeWorkspace
 } from './workspace'
 import { registerTerminalHandlers, disposeTerminal } from './terminal'
 import { registerGitHandlers } from './git'
 import { registerAppSettingsHandlers } from './app-settings'
 import { buildAppMenu, registerMenuHandlers } from './menu'
+import { createMainWindow, registerTabHandlers, getActiveTabRoot } from './tabs'
 import { MEDIA_SCHEME } from '../shared/ipc'
 
 // 開発(HMR)と試用(ビルド版)で永続データ（recent-workspaces.json 等）が混ざらないよう、
@@ -30,45 +32,6 @@ protocol.registerSchemesAsPrivileged([
     privileges: { standard: true, secure: true, supportFetchAPI: true }
   }
 ])
-
-// メインウィンドウを生成する。
-// セキュリティ方針（spec 2.3.3）に従い、renderer に Node.js API を直接公開しない。
-function createWindow(): void {
-  const mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
-    show: false,
-    titleBarStyle: 'hiddenInset',
-    // 信号機ボタンを、renderer 側で用意する高さ 38px のトップバーの中央に配置する。
-    trafficLightPosition: { x: 12, y: 12 },
-    backgroundColor: '#1e1e1e',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  })
-
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
-  })
-
-  // 外部リンクは OS のデフォルトブラウザで開く（アプリ内ナビゲーションを防ぐ）。
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
-    return { action: 'deny' }
-  })
-
-  // 開発時は Vite dev server を、本番ではビルド済み HTML を読み込む。
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
-}
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.nomura.atelier')
@@ -91,6 +54,9 @@ app.whenReady().then(() => {
   // workspace 関連の IPC ハンドラを登録する。
   registerWorkspaceHandlers()
   // Markdown プレビューの画像表示用カスタムスキームのハンドラを登録する。
+  // 全タブビューは同一 session を共有するため、デフォルト session に 1 度だけ登録すればよい。
+  // 解決に使う root は「アクティブタブの root」を tabs.ts から取得する。
+  setActiveRootResolver(getActiveTabRoot)
   registerMediaProtocol()
   // 統合ターミナル関連の IPC ハンドラを登録する。
   registerTerminalHandlers()
@@ -98,14 +64,17 @@ app.whenReady().then(() => {
   registerGitHandlers()
   // アプリ設定（設定画面）の取得・保存 IPC を登録する。
   registerAppSettingsHandlers()
+  // タブ（クロームシェル）操作の IPC を登録する。
+  registerTabHandlers()
   // 表示メニューのレイアウト連携 IPC を登録し、アプリメニューを構築する。
   registerMenuHandlers()
   buildAppMenu()
 
-  createWindow()
+  // メインウィンドウ（クロームシェル + 初期タブ）を生成する。
+  createMainWindow()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
   })
 })
 

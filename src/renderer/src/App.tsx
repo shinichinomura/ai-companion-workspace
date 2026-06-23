@@ -26,6 +26,7 @@ function App(): JSX.Element {
   const applyFsChanges = useWorkspaceStore((s) => s.applyFsChanges)
   const restoreLastFolder = useWorkspaceStore((s) => s.restoreLastFolder)
   const openFolder = useWorkspaceStore((s) => s.openFolder)
+  const openFolderByPath = useWorkspaceStore((s) => s.openFolderByPath)
   const setShowHidden = useWorkspaceStore((s) => s.setShowHidden)
   const refreshGitStatus = useWorkspaceStore((s) => s.refreshGitStatus)
   const loadSettings = useSettingsStore((s) => s.load)
@@ -155,18 +156,21 @@ function App(): JSX.Element {
     return unsubscribe
   }, [])
 
-  // 起動時に前回フォルダを自動で開き直す（spec 4.2 最近開いたフォルダの保存）。
+  // タブ起動時の初期動作。main が query で指示する:
+  //   ?root=<path> … 指定フォルダを開く（セッション復元・特定フォルダ起動）
+  //   ?restore=1   … 前回フォルダを自動で開き直す（初期タブ。spec 4.2）
+  //   いずれも無し  … 新規タブ。何も開かず最近開いたフォルダ一覧を表示する。
   useEffect(() => {
-    void restoreLastFolder()
-  }, [restoreLastFolder])
+    const params = new URLSearchParams(window.location.search)
+    const root = params.get('root')
+    if (root) void openFolderByPath(root)
+    else if (params.get('restore') === '1') void restoreLastFolder()
+  }, [openFolderByPath, restoreLastFolder])
 
   return (
     <div className="app">
-      {/* ウィンドウ移動用のトップバー。-webkit-app-region: drag で帯全体を掴めるようにする。
-          信号機ボタンの領域を空けるため左に余白を取る（main の trafficLightPosition と対応）。 */}
-      <div className="titlebar">
-        <span className="titlebar-title">Atelier</span>
-      </div>
+      {/* タブストリップ（タイトルバー）はクロームシェル側に移したため、ここでは描画しない。
+          各タブビューはストリップの下に配置されるので信号機との干渉も無い。 */}
       <PanelGroup direction="horizontal" autoSaveId="outer-layout">
         <Panel defaultSize={20} minSize={12} className="pane pane--soft">
           <FileExplorer />

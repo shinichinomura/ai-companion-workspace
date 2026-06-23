@@ -37,7 +37,19 @@ export const IpcChannel = {
   SettingsGet: 'settings:get', // R→M invoke: 現在のアプリ設定を取得する
   SettingsSet: 'settings:set', // R→M invoke: アプリ設定を保存し、正規化後の値を返す
 
-  // 統合ターミナル（spec 2.2.4）。MVP は単一インスタンス。
+  // タブ（複数プロジェクトの同時オープン）。クロームシェル（タブバー）と main の連携。
+  // M→shell push: タブ一覧とアクティブタブの最新状態。
+  TabsState: 'tabs:state',
+  // shell→M send: 現在のタブ状態を要求する（マウント直後の初期同期用）。
+  TabsRequestState: 'tabs:request-state',
+  // shell→M send: 新しいタブ（空）を作成する。
+  TabNew: 'tabs:new',
+  // shell→M send: 指定タブをアクティブにする。
+  TabActivate: 'tabs:activate',
+  // shell→M send: 指定タブを閉じる。
+  TabClose: 'tabs:close',
+
+  // 統合ターミナル（spec 2.2.4）。タブ（webContents）単位で PTY を保持する。
   TerminalStart: 'terminal:start', // R→M invoke: cwd(project root) で PTY 起動
   TerminalInput: 'terminal:input', // R→M send: キー入力を PTY に書き込む
   TerminalResize: 'terminal:resize', // R→M send: cols/rows 変更
@@ -61,6 +73,22 @@ export function mediaUrl(relPath: string): string {
     .map(encodeURIComponent)
     .join('/')
   return `${MEDIA_SCHEME}://r/${encoded}`
+}
+
+// タブ 1 件の表示情報（クロームシェルに渡す）。id は webContents.id（安定・一意）。
+export interface TabInfo {
+  id: number
+  // タブに表示するラベル（プロジェクト名。未選択時は「新規タブ」）。
+  title: string
+  // 未保存の変更があるか（Phase 5 で利用。当面は常に false）。
+  dirty?: boolean
+}
+
+// クロームシェルに push するタブバーの状態。
+export interface TabsState {
+  tabs: TabInfo[]
+  // アクティブタブの id。タブが無ければ null。
+  activeId: number | null
 }
 
 // Editor と Terminal の並べ方。'horizontal' = 左右, 'vertical' = 上下。
@@ -256,4 +284,16 @@ export interface WorkspaceApi {
   onTerminalExit: (cb: (exit: TerminalExit) => void) => () => void
   // drag & drop された File の OS 上の絶対パスを得る（Electron 32+ で File.path が廃止されたため）。
   getPathForFile: (file: File) => string
+
+  // --- タブバー（クロームシェル）専用。タブ本体（App）からは使わない。 ---
+  // タブ状態の更新を購読する。返り値は購読解除関数。
+  onTabsState: (cb: (state: TabsState) => void) => () => void
+  // 現在のタブ状態を要求する（マウント直後の初期同期）。
+  requestTabsState: () => void
+  // 新しいタブ（空）を作成する。
+  newTab: () => void
+  // 指定タブをアクティブにする。
+  activateTab: (id: number) => void
+  // 指定タブを閉じる。
+  closeTab: (id: number) => void
 }
