@@ -4,6 +4,7 @@ import { is } from '@electron-toolkit/utils'
 import { IpcChannel, type TabsState } from '../shared/ipc'
 import { getProjectRoot, setRootChangedListener } from './workspace'
 import { syncMenuChecks, forgetTabMenuState } from './menu'
+import { loadSession, saveSession } from './session'
 
 // タブストリップ（クロームシェル）の高さ。renderer の shell.css の .tabbar と一致させる。
 const STRIP_H = 38
@@ -23,6 +24,20 @@ let win: BrowserWindow | null = null
 let tabs: Tab[] = []
 // アクティブタブの id。
 let activeId: number | null = null
+// セッション復元中は途中状態を保存しないためのフラグ。
+let restoring = false
+
+// 現在のタブ構成（各タブの root と順序・アクティブ）を永続化する。
+// 起動時にこの内容からタブを再生成する。復元中は途中状態を保存しない。
+function persistSession(): void {
+  if (restoring) return
+  const roots = tabs.map((t) => getProjectRoot(t.id))
+  const activeIndex = Math.max(
+    0,
+    tabs.findIndex((t) => t.id === activeId)
+  )
+  saveSession({ roots, activeIndex })
+}
 
 // preload スクリプトの絶対パス。
 function preloadPath(): string {
@@ -83,6 +98,7 @@ function activateTab(id: number): void {
   // メニューのチェック状態をこのタブの値に合わせる。
   syncMenuChecks(id)
   notifyShell()
+  persistSession()
 }
 
 // 新しいタブを作成する。
@@ -142,6 +158,7 @@ function closeTab(id: number): void {
   if (activeId !== null) syncMenuChecks(activeId)
   layout()
   notifyShell()
+  persistSession()
 }
 
 // メディアプロトコルの解決に使う「アクティブタブの project root」。
@@ -226,18 +243,40 @@ export function createMainWindow(): void {
   // ウィンドウ本体（webContents）にクロームシェル（タブバー）を読み込む。
   loadRenderer(win, 'shell')
 
-  // openRoot 成功時にタブのタイトルを更新する（renderer 改修なしで反映）。
+  // openRoot 成功時にタブのタイトルを更新し、セッション（各タブの root）を保存する。
   setRootChangedListener((wcId, root) => {
     const tab = tabs.find((t) => t.id === wcId)
     if (!tab) return
     tab.title = root ? basename(root) : '新規タブ'
     notifyShell()
+    persistSession()
   })
 
-  // 初期タブ。従来どおり前回フォルダを自動復元する。
+  // シェルの読み込み完了後に、前回のタブセッションを復元する。
   win.webContents.once('did-finish-load', () => {
-    if (tabs.length === 0) createTab({ restore: true })
+    if (tabs.length === 0) restoreSession()
   })
+}
+
+// 前回のタブセッションを復元する。保存が無ければ従来どおり 1 タブで前回フォルダを復元する。
+function restoreSession(): void {
+  const saved = loadSession()
+  // 復元中は保存しない。各タブの root は renderer が非同期にフォルダを開いて初めて確定するため、
+  // ここで保存すると root 未確定（null）でセッションを上書きしてしまう。
+  // 復元後は、各タブがフォルダを開いた時点で rootChangedCb が正しい root で保存する。
+  restoring = true
+  if (saved && saved.roots.length > 0) {
+    // 保存された各タブを順に再生成する（root 付きならそのフォルダを開く）。
+    for (const root of saved.roots) createTab(root ? { root } : {})
+  } else {
+    // 初回起動など。従来どおり 1 タブで前回フォルダを自動復元する。
+    createTab({ restore: true })
+  }
+
+  // 復元後のアクティブタブを確定して表示・メニュー・シェルを同期する。
+  const target = (saved && tabs[saved.activeIndex]) || tabs[tabs.length - 1]
+  if (target && target.id !== activeId) activateTab(target.id)
+  restoring = false
 }
 
 // クロームシェルからのタブ操作 IPC を登録する。app ready 後に 1 度だけ呼ぶ。
