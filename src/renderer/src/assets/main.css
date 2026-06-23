@@ -411,6 +411,13 @@ body {
   background: #094771;
 }
 
+/* 右クリックでコンテキストメニューを開いている対象の行。
+   メニュー表示中だけ枠線で示し、どのファイルを操作中か分かるようにする。 */
+.tree-row.menu-target {
+  box-shadow: inset 0 0 0 1px var(--accent);
+  border-radius: 3px;
+}
+
 .tree-twisty {
   width: 18px;
   flex: 0 0 auto;

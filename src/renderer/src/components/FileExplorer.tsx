@@ -25,6 +25,8 @@ interface ExplorerInteraction {
   openMenu: (node: FileNode, x: number, y: number) => void
   // リネーム編集中の relPath（その行だけ入力欄を表示する）。
   renamingPath: string | null
+  // コンテキストメニューを開いている対象の relPath（その行をハイライトする）。null = 非表示。
+  menuTargetPath: string | null
   // リネームを確定する（名前が変わっていれば実行）。
   commitRename: (relPath: string, newName: string) => void
   // リネームを取りやめる。
@@ -180,7 +182,7 @@ function TreeNode({ node, depth, statuses, changedDirs }: TreeProps): JSX.Elemen
   const showHidden = useWorkspaceStore((s) => s.showHidden)
   const toggleDir = useWorkspaceStore((s) => s.toggleDir)
   const openFile = useWorkspaceStore((s) => s.openFile)
-  const { openMenu, renamingPath, commitRename, cancelRename } = useExplorer()
+  const { openMenu, renamingPath, menuTargetPath, commitRename, cancelRename } = useExplorer()
 
   const isExpanded = node.isDirectory && expandedDirs.has(node.relPath)
   const isActive = !node.isDirectory && activeFile?.relPath === node.relPath
@@ -194,6 +196,8 @@ function TreeNode({ node, depth, statuses, changedDirs }: TreeProps): JSX.Elemen
   const dirChanged = node.isDirectory && changedDirs.has(node.relPath)
   // この行がリネーム編集中か。
   const isRenaming = renamingPath === node.relPath
+  // この行を対象にコンテキストメニューを開いているか。
+  const isMenuTarget = menuTargetPath === node.relPath
 
   // ラベル（ファイル名）の色クラス。
   const labelClass = status
@@ -227,7 +231,7 @@ function TreeNode({ node, depth, statuses, changedDirs }: TreeProps): JSX.Elemen
   return (
     <>
       <div
-        className={`tree-row${isActive ? ' active' : ''}${isDeleted ? ' deleted' : ''}`}
+        className={`tree-row${isActive ? ' active' : ''}${isDeleted ? ' deleted' : ''}${isMenuTarget ? ' menu-target' : ''}`}
         style={{ paddingLeft: 8 + depth * 14 }}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
@@ -408,8 +412,14 @@ function FileExplorer(): JSX.Element {
   )
 
   const interaction = useMemo<ExplorerInteraction>(
-    () => ({ openMenu, renamingPath, commitRename, cancelRename }),
-    [openMenu, renamingPath, commitRename, cancelRename]
+    () => ({
+      openMenu,
+      renamingPath,
+      menuTargetPath: menu?.node.relPath ?? null,
+      commitRename,
+      cancelRename
+    }),
+    [openMenu, renamingPath, menu, commitRename, cancelRename]
   )
 
   // メニューの各項目。対象ノードに対する操作を組み立てる。
