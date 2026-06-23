@@ -85,6 +85,12 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
       window.api.terminalInput(data)
     })
 
+    // ベル（\x07）を main に通知する。claude CLI が操作待ちになると鳴らすため、
+    // アプリが非アクティブ／別タブのときに main 側で OS 通知を出す。
+    const bellSub = term.onBell(() => {
+      window.api.notifyTerminalBell()
+    })
+
     // PTY 出力 → xterm。
     const offData = window.api.onTerminalData((data) => {
       if (!disposed) term.write(data)
@@ -113,6 +119,7 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
       disposed = true
       resizeObserver.disconnect()
       inputSub.dispose()
+      bellSub.dispose()
       offData()
       offExit()
       // main 側の PTY も破棄する（root 切替・アンマウント時）。

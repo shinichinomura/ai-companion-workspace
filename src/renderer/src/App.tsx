@@ -151,6 +151,14 @@ function App(): JSX.Element {
     return unsubscribe
   }, [openFolder])
 
+  // 「最近使ったフォルダ」メニューを購読し、アクティブタブで指定パスを開く。
+  useEffect(() => {
+    const unsubscribe = window.api.onRequestOpenFolderByPath((path) => {
+      void openFolderByPath(path)
+    })
+    return unsubscribe
+  }, [openFolderByPath])
+
   // file watcher の変更通知を購読し、ツリー / エディタに反映する（spec 2.2.5）。
   useEffect(() => {
     const unsubscribe = window.api.onFsEvent((batch) => {

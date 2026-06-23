@@ -11,7 +11,7 @@ import {
 import { registerTerminalHandlers, disposeTerminal } from './terminal'
 import { registerGitHandlers } from './git'
 import { registerAppSettingsHandlers } from './app-settings'
-import { buildAppMenu, registerMenuHandlers } from './menu'
+import { buildAppMenu, refreshRecentMenu, registerMenuHandlers } from './menu'
 import { createMainWindow, registerTabHandlers, getActiveTabRoot } from './tabs'
 import { MEDIA_SCHEME } from '../shared/ipc'
 
@@ -68,7 +68,10 @@ app.whenReady().then(() => {
   registerTabHandlers()
   // 表示メニューのレイアウト連携 IPC を登録し、アプリメニューを構築する。
   registerMenuHandlers()
+  // まず最近フォルダを読み込まずに即時構築し（メニューバーを早く出す）、
+  // 続けて最近フォルダを読み込んで「最近使ったフォルダ」付きで再構築する。
   buildAppMenu()
+  void refreshRecentMenu()
 
   // メインウィンドウ（クロームシェル + 初期タブ）を生成する。
   createMainWindow()

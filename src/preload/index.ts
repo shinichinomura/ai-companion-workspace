@@ -58,6 +58,11 @@ const api: WorkspaceApi = {
     ipcRenderer.on(IpcChannel.RequestOpenFolder, listener)
     return () => ipcRenderer.removeListener(IpcChannel.RequestOpenFolder, listener)
   },
+  onRequestOpenFolderByPath: (cb: (path: string) => void) => {
+    const listener = (_e: unknown, path: string): void => cb(path)
+    ipcRenderer.on(IpcChannel.RequestOpenFolderByPath, listener)
+    return () => ipcRenderer.removeListener(IpcChannel.RequestOpenFolderByPath, listener)
+  },
   onOpenSettings: (cb: () => void) => {
     const listener = (): void => cb()
     ipcRenderer.on(IpcChannel.OpenSettings, listener)
@@ -80,6 +85,7 @@ const api: WorkspaceApi = {
     ipcRenderer.on(IpcChannel.TerminalExit, listener)
     return () => ipcRenderer.removeListener(IpcChannel.TerminalExit, listener)
   },
+  notifyTerminalBell: () => ipcRenderer.send(IpcChannel.TerminalBell),
   // drag & drop された File から OS 上の絶対パスを得る。
   // Electron 32+ では File.path が廃止されたため webUtils を使う（renderer から直接は触れない）。
   getPathForFile: (file: File) => webUtils.getPathForFile(file),

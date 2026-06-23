@@ -30,6 +30,8 @@ export const IpcChannel = {
   ShowHiddenChanged: 'view:show-hidden-changed',
   // M→R push: 「ファイル」メニューの「フォルダを開く」が選ばれた。
   RequestOpenFolder: 'view:request-open-folder',
+  // M→R push: 「最近使ったフォルダ」メニューの項目が選ばれた。renderer はそのパスを開く。
+  RequestOpenFolderByPath: 'view:request-open-folder-by-path',
   // M→R push: アプリメニューの「設定…」が選ばれた。renderer は設定モーダルを開く。
   OpenSettings: 'view:open-settings',
 
@@ -55,7 +57,10 @@ export const IpcChannel = {
   TerminalResize: 'terminal:resize', // R→M send: cols/rows 変更
   TerminalDispose: 'terminal:dispose', // R→M send: PTY 破棄
   TerminalData: 'terminal:data', // M→R push: PTY 出力
-  TerminalExit: 'terminal:exit' // M→R push: プロセス終了通知
+  TerminalExit: 'terminal:exit', // M→R push: プロセス終了通知
+  // R→M send: ターミナルでベル（\x07）が鳴った。main は非アクティブ時に OS 通知を出す。
+  // claude CLI が操作待ち（入力・許可待ち）になると鳴らすベルを拾う用途。
+  TerminalBell: 'terminal:bell'
 } as const
 
 // Markdown プレビューで画像を表示するためのカスタムスキーム。
@@ -265,6 +270,8 @@ export interface WorkspaceApi {
   reportShowHidden: (show: boolean) => void
   // 「ファイル」メニューの「フォルダを開く」を購読する。返り値は購読解除関数。
   onRequestOpenFolder: (cb: () => void) => () => void
+  // 「最近使ったフォルダ」メニューで選ばれたパスを購読する。返り値は購読解除関数。
+  onRequestOpenFolderByPath: (cb: (path: string) => void) => () => void
   // 「設定…」メニューが選ばれたら通知を受ける。返り値は購読解除関数。
   onOpenSettings: (cb: () => void) => () => void
 
@@ -282,6 +289,8 @@ export interface WorkspaceApi {
   onTerminalData: (cb: (data: string) => void) => () => void
   // プロセス終了を購読する。返り値は購読解除関数。
   onTerminalExit: (cb: (exit: TerminalExit) => void) => () => void
+  // ターミナルでベルが鳴ったことを main に通知する。main 側で非アクティブ時に OS 通知を出す。
+  notifyTerminalBell: () => void
   // drag & drop された File の OS 上の絶対パスを得る（Electron 32+ で File.path が廃止されたため）。
   getPathForFile: (file: File) => string
 

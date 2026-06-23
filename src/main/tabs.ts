@@ -1,9 +1,9 @@
-import { shell, BrowserWindow, WebContentsView, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, Notification, WebContentsView, ipcMain } from 'electron'
 import { basename, join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { IpcChannel, type TabsState } from '../shared/ipc'
 import { getProjectRoot, setRootChangedListener } from './workspace'
-import { syncMenuChecks, forgetTabMenuState } from './menu'
+import { syncMenuChecks, forgetTabMenuState, refreshRecentMenu } from './menu'
 import { loadSession, saveSession } from './session'
 
 // タブストリップ（クロームシェル）の高さ。renderer の shell.css の .tabbar と一致させる。
@@ -161,6 +161,47 @@ function closeTab(id: number): void {
   persistSession()
 }
 
+// ベル通知の連打を抑えるためのスロットル間隔（ms）と、タブごとの最終通知時刻。
+// claude CLI は操作待ちで複数回ベルを鳴らすことがあるため、短時間の重複通知を間引く。
+const BELL_THROTTLE_MS = 2000
+const lastBellAt = new Map<number, number>()
+
+// ターミナルでベルが鳴ったときの処理。送信元タブが「フォアグラウンドで表示中」なら
+// ユーザーは既に見ているので何もしない。非アクティブ（別タブ／ウィンドウ非フォーカス／
+// 別アプリ）のときだけ OS 通知を出し、クリックでそのタブへ復帰できるようにする。
+function handleTerminalBell(wcId: number): void {
+  if (!win || win.isDestroyed()) return
+  const tab = tabs.find((t) => t.id === wcId)
+  if (!tab) return
+
+  // ユーザーがこのタブを見ている最中（ウィンドウがフォーカス済み かつ アクティブタブ）は通知しない。
+  if (win.isFocused() && activeId === wcId) return
+
+  // 連打スロットル。
+  const now = Date.now()
+  const prev = lastBellAt.get(wcId) ?? 0
+  if (now - prev < BELL_THROTTLE_MS) return
+  lastBellAt.set(wcId, now)
+
+  if (!Notification.isSupported()) return
+  const notification = new Notification({
+    title: tab.title,
+    body: 'ターミナルが操作待ちです',
+    silent: false
+  })
+  // 通知クリックでウィンドウを前面に出し、該当タブへ切り替える。
+  notification.on('click', () => {
+    if (!win || win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+    // 別アプリにフォーカスがある場合に Atelier を前面化する（macOS）。
+    if (process.platform === 'darwin') app.focus({ steal: true })
+    activateTab(wcId)
+  })
+  notification.show()
+}
+
 // メディアプロトコルの解決に使う「アクティブタブの project root」。
 // 媒体ハンドラは送信元を取れないため、表示中（アクティブ）のタブの root を使う。
 export function getActiveTabRoot(): string | null {
@@ -250,6 +291,8 @@ export function createMainWindow(): void {
     tab.title = root ? basename(root) : '新規タブ'
     notifyShell()
     persistSession()
+    // フォルダを開くと最近フォルダ一覧が変化するため、メニューを再構築する。
+    if (root) void refreshRecentMenu()
   })
 
   // シェルの読み込み完了後に、前回のタブセッションを復元する。
@@ -285,4 +328,6 @@ export function registerTabHandlers(): void {
   ipcMain.on(IpcChannel.TabNew, () => createTab())
   ipcMain.on(IpcChannel.TabActivate, (_e, id: number) => activateTab(id))
   ipcMain.on(IpcChannel.TabClose, (_e, id: number) => closeTab(id))
+  // 送信元タブ（e.sender.id）でベルが鳴った。非アクティブ時のみ OS 通知を出す。
+  ipcMain.on(IpcChannel.TerminalBell, (e) => handleTerminalBell(e.sender.id))
 }
