@@ -3,15 +3,18 @@
 // アーキテクチャ原則どおり、出力 HTML は必ず rehype-sanitize を通す（任意 HTML 実行は不可）。
 import { unified } from 'unified'
 import remarkParse from 'remark-parse'
+import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
 import remarkRehype from 'remark-rehype'
 import rehypeRaw from 'rehype-raw'
 import rehypeSlug from 'rehype-slug'
 import rehypeSanitize from 'rehype-sanitize'
 import rehypeStringify from 'rehype-stringify'
-import { visit } from 'unist-util-visit'
+import { visit, SKIP } from 'unist-util-visit'
 import { VFile } from 'vfile'
-import type { Root } from 'hast'
+import yaml from 'js-yaml'
+import type { Root as HastRoot } from 'hast'
+import type { Root as MdastRoot, Table, TableRow } from 'mdast'
 import { mediaUrl } from '../../../shared/ipc'
 
 // プレビュー内リンク／画像の参照先を project root 相対パスへ解決する。
@@ -56,13 +59,66 @@ export function resolveLinkPath(baseRelPath: string, href: string): string | nul
   return stack.join('/')
 }
 
+// フロントマター（先頭の `---` で挟まれた YAML ブロック）の値を、表示用の文字列へ整える。
+// 文字列はそのまま、配列はカンマ区切り、その他のオブジェクトは JSON 文字列にする。
+function formatFrontmatterValue(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) return value.map((v) => formatFrontmatterValue(v)).join(', ')
+  return JSON.stringify(value)
+}
+
+// remark-frontmatter が抽出した先頭の 'yaml' ノードを、キー/値の2列テーブルへ変換する remark プラグイン。
+// フロントマターは Markdown 本文ではなくメタデータなので、素の Markdown として解釈させると
+// `---` が水平線や setext 見出しに化けて崩れる。ここで明示的にテーブル化して可読な形で見せる。
+// パースに失敗した・オブジェクトでない場合は、崩れた見た目を残さないようノードごと取り除く。
+function remarkFrontmatterTable() {
+  return (tree: MdastRoot): void => {
+    visit(tree, 'yaml', (node, index, parent) => {
+      if (!parent || typeof index !== 'number') return
+      let data: unknown
+      try {
+        data = yaml.load(node.value)
+      } catch {
+        data = null
+      }
+      // オブジェクト（キー/値）以外は表に起こせないので取り除く。
+      if (data == null || typeof data !== 'object' || Array.isArray(data)) {
+        parent.children.splice(index, 1)
+        return [SKIP, index]
+      }
+      const row = (key: string, value: string): TableRow => ({
+        type: 'tableRow',
+        children: [
+          { type: 'tableCell', children: [{ type: 'text', value: key }] },
+          { type: 'tableCell', children: [{ type: 'text', value }] }
+        ]
+      })
+      const table: Table = {
+        type: 'table',
+        align: [null, null],
+        children: [
+          row('キー', '値'),
+          ...Object.entries(data as Record<string, unknown>).map(([key, value]) =>
+            row(key, formatFrontmatterValue(value))
+          )
+        ]
+      }
+      parent.children.splice(index, 1, table)
+      // 差し替え後のノードを再訪しないよう、同じ位置から次へ進める。
+      return [SKIP, index + 1]
+    })
+  }
+}
+
 // 相対パスの画像 src をカスタムスキーム（MEDIA_SCHEME）の URL へ書き換える rehype プラグイン。
 // sanitize の後段で実行するため、ここで付与する非 http スキームは sanitize に落とされない
 // （URL は resolveLinkPath で project root 内に解決できた相対パスからのみ生成し、
 //   実ファイル配信時に main 側でも project root 内かを再検証する）。
 // 表示中ファイルの relPath は VFile.data.baseRelPath から受け取る。
 function rehypeResolveMedia() {
-  return (tree: Root, file: VFile): void => {
+  return (tree: HastRoot, file: VFile): void => {
     const baseRelPath = typeof file.data.baseRelPath === 'string' ? file.data.baseRelPath : ''
     visit(tree, 'element', (node) => {
       if (node.tagName !== 'img' || !node.properties) return
@@ -82,6 +138,11 @@ function rehypeResolveMedia() {
 // GFM 相当の基本記法（表・打消し線・タスクリスト・自動リンク）に対応する。
 const processor = unified()
   .use(remarkParse)
+  // 先頭の YAML フロントマターを本文と分離して 'yaml' ノードとして抽出する
+  // （これが無いと `---` ブロックが素の Markdown として誤解釈され表示が崩れる）。
+  .use(remarkFrontmatter, ['yaml'])
+  // 抽出したフロントマターをキー/値テーブルへ変換する。
+  .use(remarkFrontmatterTable)
   .use(remarkGfm)
   // 生 HTML（`<img width=...>` 等）を raw ノードとして残し、後段の rehype-raw でパースする。
   // 生成物の写真一覧（farming の index.md 等）は Markdown ではなく生 HTML の img を使うため対応する。
