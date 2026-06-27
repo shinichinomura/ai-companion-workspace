@@ -23,6 +23,14 @@ function EditorPane(): JSX.Element {
   const saveActiveFile = useWorkspaceStore((s) => s.saveActiveFile)
   const reloadActiveFromDisk = useWorkspaceStore((s) => s.reloadActiveFromDisk)
   const dismissExternalChange = useWorkspaceStore((s) => s.dismissExternalChange)
+  const goBack = useWorkspaceStore((s) => s.goBack)
+  const goForward = useWorkspaceStore((s) => s.goForward)
+  const historyIndex = useWorkspaceStore((s) => s.historyIndex)
+  const historyLength = useWorkspaceStore((s) => s.history.length)
+
+  // 戻る/進むが可能か（履歴の端では不可）。
+  const canBack = historyIndex > 0
+  const canForward = historyIndex < historyLength - 1
 
   const dirty = isDirty(activeFile)
   const markdown = activeFile != null && !activeFile.isBinary && isMarkdown(activeFile.relPath)
@@ -37,6 +45,26 @@ function EditorPane(): JSX.Element {
   return (
     <div className="pane-inner">
       <div className="pane-header">
+        <span className="history-nav">
+          <button
+            className="history-nav-btn"
+            onClick={() => void goBack()}
+            disabled={!canBack}
+            title="戻る"
+            aria-label="戻る"
+          >
+            ‹
+          </button>
+          <button
+            className="history-nav-btn"
+            onClick={() => void goForward()}
+            disabled={!canForward}
+            title="進む"
+            aria-label="進む"
+          >
+            ›
+          </button>
+        </span>
         {activeFile ? (
           <>
             {activeFile.name}

@@ -717,6 +717,44 @@ body {
   border-left: 1px solid var(--accent);
 }
 
+/* ファイル履歴の戻る/進むボタン（エディタヘッダー左端） */
+.history-nav {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 10px;
+}
+
+.history-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  /* 矢印グリフは小さいため、ヘッダーの 11px より少し大きめにして視認性を確保する。 */
+  font-size: 15px;
+  line-height: 1;
+  color: var(--fg-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* 隣り合うボタンの境界線が二重にならないよう左側を詰める。 */
+.history-nav-btn + .history-nav-btn {
+  border-left: none;
+}
+
+.history-nav-btn:hover:not(:disabled) {
+  color: var(--fg);
+}
+
+.history-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* Markdown プレビュー本体 */
 .markdown-preview {
   max-width: 860px;

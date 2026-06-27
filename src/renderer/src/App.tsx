@@ -81,8 +81,12 @@ function App(): JSX.Element {
   // Chromium は button 3=戻る / 4=進む を既定でページ履歴ナビゲーションに使うため、
   // preventDefault でその既定動作（SPA からの離脱）を抑止し、自前の履歴移動に振り替える。
   // capture フェーズで拾い、各ペイン（エディタ・ターミナル等）より先に処理する。
+  // 実処理は mousedown 一回のみ。mouseup / auxclick は既定ナビ抑止のために潰すだけ。
   useEffect(() => {
-    const onMouseUp = (e: MouseEvent): void => {
+    const onMouseDown = (e: MouseEvent): void => {
+      // 診断用ログ（サイドボタンの DOM イベントが届くか・button 番号の確認用）。
+      // 切り分けが済んだら削除する。
+      if (e.button >= 3) console.debug('[history-nav] mousedown button=', e.button)
       if (e.button === 3) {
         e.preventDefault()
         void goBack()
@@ -91,15 +95,16 @@ function App(): JSX.Element {
         void goForward()
       }
     }
-    // mousedown 側でも既定動作が走る環境があるため、両方で抑止する（実処理は mouseup のみ）。
-    const onMouseDown = (e: MouseEvent): void => {
+    const suppress = (e: MouseEvent): void => {
       if (e.button === 3 || e.button === 4) e.preventDefault()
     }
-    window.addEventListener('mouseup', onMouseUp, true)
     window.addEventListener('mousedown', onMouseDown, true)
+    window.addEventListener('mouseup', suppress, true)
+    window.addEventListener('auxclick', suppress, true)
     return () => {
-      window.removeEventListener('mouseup', onMouseUp, true)
       window.removeEventListener('mousedown', onMouseDown, true)
+      window.removeEventListener('mouseup', suppress, true)
+      window.removeEventListener('auxclick', suppress, true)
     }
   }, [goBack, goForward])
 
