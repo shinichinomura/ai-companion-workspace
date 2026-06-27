@@ -459,6 +459,7 @@ function FileExplorer(): JSX.Element {
   const rootName = useWorkspaceStore((s) => s.rootName)
   const rootChildren = useWorkspaceStore((s) => s.childrenByDir[''])
   const showHidden = useWorkspaceStore((s) => s.showHidden)
+  const setShowHidden = useWorkspaceStore((s) => s.setShowHidden)
   const showOnlyChanged = useWorkspaceStore((s) => s.showOnlyChanged)
   const setShowOnlyChanged = useWorkspaceStore((s) => s.setShowOnlyChanged)
   const gitStatuses = useWorkspaceStore((s) => s.gitStatuses)
@@ -529,21 +530,35 @@ function FileExplorer(): JSX.Element {
         <div className="pane-header explorer-header">
           <span className="explorer-title">{rootName ?? 'Explorer'}</span>
           {rootName && (
-            <button
-              type="button"
-              className={`explorer-toggle${showOnlyChanged ? ' on' : ''}`}
-              onClick={() => setShowOnlyChanged(!showOnlyChanged)}
-              title={showOnlyChanged ? 'すべてのファイルを表示' : '変更されたファイルのみ表示'}
-              aria-pressed={showOnlyChanged}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-                <circle cx="4" cy="3.5" r="1.8" />
-                <circle cx="4" cy="12.5" r="1.8" />
-                <circle cx="12" cy="8" r="1.8" />
-                <path d="M4 5.3v5.4" />
-                <path d="M5.7 4.2h2.8a1.8 1.8 0 0 1 1.8 1.8v.4" />
-              </svg>
-            </button>
+            <div className="explorer-actions">
+              <button
+                type="button"
+                className={`explorer-toggle${showHidden ? ' on' : ''}`}
+                onClick={() => setShowHidden(!showHidden)}
+                title={showHidden ? '. で始まるファイルを隠す' : '. で始まるファイルを表示'}
+                aria-pressed={showHidden}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+                  <path d="M1 8s2.5-4.5 7-4.5 7 4.5 7 4.5-2.5 4.5-7 4.5S1 8 1 8z" />
+                  <circle cx="8" cy="8" r="1.9" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className={`explorer-toggle${showOnlyChanged ? ' on' : ''}`}
+                onClick={() => setShowOnlyChanged(!showOnlyChanged)}
+                title={showOnlyChanged ? 'すべてのファイルを表示' : '変更されたファイルのみ表示'}
+                aria-pressed={showOnlyChanged}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+                  <circle cx="4" cy="3.5" r="1.8" />
+                  <circle cx="4" cy="12.5" r="1.8" />
+                  <circle cx="12" cy="8" r="1.8" />
+                  <path d="M4 5.3v5.4" />
+                  <path d="M5.7 4.2h2.8a1.8 1.8 0 0 1 1.8 1.8v.4" />
+                </svg>
+              </button>
+            </div>
           )}
         </div>
         <div className="pane-body tree">

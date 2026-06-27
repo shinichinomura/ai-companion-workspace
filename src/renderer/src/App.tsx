@@ -38,7 +38,6 @@ function App(): JSX.Element {
   const restoreLastFolder = useWorkspaceStore((s) => s.restoreLastFolder)
   const openFolder = useWorkspaceStore((s) => s.openFolder)
   const openFolderByPath = useWorkspaceStore((s) => s.openFolderByPath)
-  const setShowHidden = useWorkspaceStore((s) => s.setShowHidden)
   const refreshGitStatus = useWorkspaceStore((s) => s.refreshGitStatus)
   const loadSettings = useSettingsStore((s) => s.load)
   // 現在のプロジェクト root。UI 設定（レイアウト等）の保存キーに使う。
@@ -115,14 +114,12 @@ function App(): JSX.Element {
   }
 
   // root（開いているプロジェクト）が変わったら、そのプロジェクトの UI 設定を読み直し、
-  // レイアウト・隠しファイルの現在値を main に通知してメニューのチェックを同期する。
-  // showHidden は store 側で applyOpenResult が root 別の値に更新済み。
+  // レイアウトの現在値を main に通知してメニューのチェックを同期する。
   useEffect(() => {
     const nextLayout = loadLayout(root)
     setLayout(nextLayout)
     setTerminalCollapsed(loadCollapsed(root))
     window.api.reportWorkLayout(nextLayout)
-    window.api.reportShowHidden(useWorkspaceStore.getState().showHidden)
   }, [root])
 
   // 表示メニューからのレイアウト切り替えを購読し、状態と root 別 localStorage に反映する。
@@ -134,14 +131,6 @@ function App(): JSX.Element {
     })
     return unsubscribe
   }, [root])
-
-  // 「表示」メニューの隠しファイル表示トグルを購読し、状態と localStorage（root 別）に反映する。
-  useEffect(() => {
-    const unsubscribe = window.api.onSetShowHidden((show) => {
-      setShowHidden(show)
-    })
-    return unsubscribe
-  }, [setShowHidden])
 
   // 「ファイル」メニューの「フォルダを開く」を購読し、フォルダ選択を開く。
   useEffect(() => {

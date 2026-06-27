@@ -55,12 +55,6 @@ const api: WorkspaceApi = {
   },
   reportWorkLayout: (layout: WorkLayout) =>
     ipcRenderer.send(IpcChannel.WorkLayoutChanged, layout),
-  onSetShowHidden: (cb: (show: boolean) => void) => {
-    const listener = (_e: unknown, show: boolean): void => cb(show)
-    ipcRenderer.on(IpcChannel.SetShowHidden, listener)
-    return () => ipcRenderer.removeListener(IpcChannel.SetShowHidden, listener)
-  },
-  reportShowHidden: (show: boolean) => ipcRenderer.send(IpcChannel.ShowHiddenChanged, show),
   onRequestOpenFolder: (cb: () => void) => {
     const listener = (): void => cb()
     ipcRenderer.on(IpcChannel.RequestOpenFolder, listener)

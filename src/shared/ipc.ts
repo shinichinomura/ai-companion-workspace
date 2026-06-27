@@ -32,10 +32,6 @@ export const IpcChannel = {
   SetWorkLayout: 'view:set-work-layout',
   // R→M send: renderer の現在レイアウトを通知し、メニューのチェック状態を同期する。
   WorkLayoutChanged: 'view:work-layout-changed',
-  // M→R push: 「表示」メニューで「. で始まるファイルを表示」が切り替えられた。
-  SetShowHidden: 'view:set-show-hidden',
-  // R→M send: renderer の現在の表示状態を通知し、メニューのチェック状態を同期する。
-  ShowHiddenChanged: 'view:show-hidden-changed',
   // M→R push: 「ファイル」メニューの「フォルダを開く」が選ばれた。
   RequestOpenFolder: 'view:request-open-folder',
   // M→R push: 「最近使ったフォルダ」メニューの項目が選ばれた。renderer はそのパスを開く。
@@ -310,10 +306,6 @@ export interface WorkspaceApi {
   onSetWorkLayout: (cb: (layout: WorkLayout) => void) => () => void
   // 現在のレイアウトを main に通知し、メニューのチェック状態を同期する。
   reportWorkLayout: (layout: WorkLayout) => void
-  // 「表示」メニューからの「. で始まるファイルを表示」切り替えを購読する。返り値は購読解除関数。
-  onSetShowHidden: (cb: (show: boolean) => void) => () => void
-  // 現在の表示状態を main に通知し、メニューのチェック状態を同期する。
-  reportShowHidden: (show: boolean) => void
   // 「ファイル」メニューの「フォルダを開く」を購読する。返り値は購読解除関数。
   onRequestOpenFolder: (cb: () => void) => () => void
   // 「最近使ったフォルダ」メニューで選ばれたパスを購読する。返り値は購読解除関数。
