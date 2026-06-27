@@ -53,14 +53,33 @@ export function isDirty(file: OpenFile | null): boolean {
   return file != null && !file.isBinary && file.content !== file.savedContent
 }
 
+// 履歴に relPath を積む。現在位置（historyIndex）より後ろは破棄してから積む。
+// ＝戻った後に別ファイルを開くと、それ以降の「進む」履歴は消える（ブラウザ標準の挙動）。
+// 直前と同じファイルを開いた場合は記録しない（履歴の重複を避ける）。
+function pushHistory(
+  relPath: string,
+  get: () => WorkspaceState,
+  set: (partial: Partial<WorkspaceState>) => void
+): void {
+  const { history, historyIndex } = get()
+  if (history[historyIndex] === relPath) return
+  const next = history.slice(0, historyIndex + 1)
+  next.push(relPath)
+  set({ history: next, historyIndex: next.length - 1 })
+}
+
 // ファイルを開く共通処理。
 // テキストは activeFile に展開してエディタ/プレビューに表示する。
 // バイナリ/巨大ファイルは OS の既定アプリ（関連付け）で開き、エディタの表示は変更しない。
 // 外部アプリで開けなかった場合のみ、従来どおりプレースホルダ表示にフォールバックする。
+// recordHistory が true のとき、実際にエディタへ展開できたファイルだけを履歴に積む
+// （バイナリを OS アプリで開いただけのケースは履歴に残さない）。
 async function openFileInternal(
   relPath: string,
   name: string,
-  set: (partial: Partial<WorkspaceState>) => void
+  get: () => WorkspaceState,
+  set: (partial: Partial<WorkspaceState>) => void,
+  recordHistory = true
 ): Promise<void> {
   const result = await window.api.readFile({ relPath })
   if (result.isBinary) {
@@ -78,6 +97,7 @@ async function openFileInternal(
       isBinary: result.isBinary
     }
   })
+  if (recordHistory) pushHistory(relPath, get, set)
 }
 
 // openFolder / openFolderByPath の結果をストアに反映する共通処理。
@@ -94,6 +114,9 @@ async function applyOpenResult(
     childrenByDir: { '': rootChildren },
     expandedDirs: new Set(),
     activeFile: null,
+    // 別フォルダに切り替えたらファイル履歴（戻る/進む）はリセットする。
+    history: [],
+    historyIndex: -1,
     // 前のフォルダの Git status を持ち越さない。直後に refreshGitStatus で埋め直す。
     gitStatuses: {},
     // 開いたプロジェクト固有の隠しファイル表示設定に切り替える。
@@ -115,6 +138,11 @@ interface WorkspaceState {
 
   // 中央ペインで開いているファイル。未選択は null。
   activeFile: OpenFile | null
+
+  // ファイル履歴（戻る/進む）。開いたファイルの relPath を新しい順ではなく時系列で積む。
+  // historyIndex が現在位置。戻ると index が減り、進むと増える。空のときは -1。
+  history: string[]
+  historyIndex: number
 
   // 最近開いたフォルダの絶対パス一覧（新しい順）。
   recentFolders: string[]
@@ -141,6 +169,9 @@ interface WorkspaceState {
   // project root 相対パスを指定してファイルを開く（プレビュー内リンク等から呼ぶ）。
   // 開けない（存在しない・ディレクトリ・root 外）場合は何もしない。
   openFileByRelPath: (relPath: string) => Promise<void>
+  // ファイル履歴を 1 つ戻る / 進む。端にいるときは何もしない。
+  goBack: () => Promise<void>
+  goForward: () => Promise<void>
   // エディタの編集内容を反映する。
   updateContent: (content: string) => void
   // 現在のファイルを保存する。binary / 未選択 / 未変更時は何もしない。
@@ -168,6 +199,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   childrenByDir: {},
   expandedDirs: new Set(),
   activeFile: null,
+  history: [],
+  historyIndex: -1,
   recentFolders: [],
   // 起動直後は root 未確定のため既定値で初期化し、フォルダを開いた時点で root 別の値に切り替える。
   showHidden: loadShowHidden(null),
@@ -234,7 +267,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   // ファイルを開いて中央ペインに表示する（バイナリは OS の既定アプリで開く）。
   openFile: async (node: FileNode) => {
     if (node.isDirectory) return
-    await openFileInternal(node.relPath, node.name, set)
+    await openFileInternal(node.relPath, node.name, get, set)
   },
 
   // project root 相対パスを指定してファイルを開く。
@@ -242,9 +275,40 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   openFileByRelPath: async (relPath: string) => {
     try {
       const name = relPath.slice(relPath.lastIndexOf('/') + 1)
-      await openFileInternal(relPath, name, set)
+      await openFileInternal(relPath, name, get, set)
     } catch {
       // 読めない（存在しない・ディレクトリ・root 外を main が拒否）場合は何もしない。
+    }
+  },
+
+  // ファイル履歴を 1 つ戻る。先頭にいるときは何もしない。
+  // 履歴移動なので recordHistory=false で開き、履歴は書き換えない。
+  goBack: async () => {
+    const { history, historyIndex } = get()
+    if (historyIndex <= 0) return
+    const newIndex = historyIndex - 1
+    const relPath = history[newIndex]
+    const name = relPath.slice(relPath.lastIndexOf('/') + 1)
+    set({ historyIndex: newIndex })
+    try {
+      await openFileInternal(relPath, name, get, set, false)
+    } catch {
+      // 履歴上のファイルが削除された等で開けない場合は、index だけ移動した状態にする。
+    }
+  },
+
+  // ファイル履歴を 1 つ進む。末尾にいるときは何もしない。
+  goForward: async () => {
+    const { history, historyIndex } = get()
+    if (historyIndex >= history.length - 1) return
+    const newIndex = historyIndex + 1
+    const relPath = history[newIndex]
+    const name = relPath.slice(relPath.lastIndexOf('/') + 1)
+    set({ historyIndex: newIndex })
+    try {
+      await openFileInternal(relPath, name, get, set, false)
+    } catch {
+      // 同上。開けない場合も index は進めた状態にする。
     }
   },
 
