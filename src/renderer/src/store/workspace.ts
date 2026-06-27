@@ -38,6 +38,16 @@ function loadShowHidden(root: string | null): boolean {
   return localStorage.getItem(showHiddenKey(root)) === 'true'
 }
 
+// 「変更ファイルのみ表示」設定の localStorage キー。隠しファイル設定と同様に root ごとに分ける。
+function showOnlyChangedKey(root: string | null): string {
+  return `show-only-changed:${root ?? '__none__'}`
+}
+
+// localStorage から、指定 root の「変更ファイルのみ表示」設定を復元する（既定は off）。
+function loadShowOnlyChanged(root: string | null): boolean {
+  return localStorage.getItem(showOnlyChangedKey(root)) === 'true'
+}
+
 // 未保存変更があるか。content と savedContent の差分で判定する。
 export function isDirty(file: OpenFile | null): boolean {
   return file != null && !file.isBinary && file.content !== file.savedContent
@@ -87,7 +97,9 @@ async function applyOpenResult(
     // 前のフォルダの Git status を持ち越さない。直後に refreshGitStatus で埋め直す。
     gitStatuses: {},
     // 開いたプロジェクト固有の隠しファイル表示設定に切り替える。
-    showHidden: loadShowHidden(result.root)
+    showHidden: loadShowHidden(result.root),
+    // 「変更ファイルのみ表示」設定もプロジェクト固有に切り替える。
+    showOnlyChanged: loadShowOnlyChanged(result.root)
   })
 }
 
@@ -109,6 +121,9 @@ interface WorkspaceState {
 
   // 隠しファイル（. で始まる名前）をツリーに表示するか。
   showHidden: boolean
+
+  // 未コミットの変更があるファイルだけをフラット表示するか。
+  showOnlyChanged: boolean
 
   // ファイルの Git status。project root 相対パス → 状態。非リポジトリ・変更なしは空。
   gitStatuses: Record<string, GitFileStatus>
@@ -141,6 +156,8 @@ interface WorkspaceState {
   renamePath: (relPath: string, newName: string) => Promise<void>
   // 隠しファイルの表示設定を切り替える（localStorage にも保存する）。
   setShowHidden: (show: boolean) => void
+  // 「変更ファイルのみ表示」設定を切り替える（localStorage にも保存する）。
+  setShowOnlyChanged: (show: boolean) => void
   // Git status を main から取得し直してツリー表示に反映する。
   refreshGitStatus: () => Promise<void>
 }
@@ -154,6 +171,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   recentFolders: [],
   // 起動直後は root 未確定のため既定値で初期化し、フォルダを開いた時点で root 別の値に切り替える。
   showHidden: loadShowHidden(null),
+  showOnlyChanged: loadShowOnlyChanged(null),
   gitStatuses: {},
 
   // フォルダを開き、ルート直下を読み込む。
@@ -381,6 +399,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   setShowHidden: (show: boolean) => {
     localStorage.setItem(showHiddenKey(get().root), show ? 'true' : 'false')
     set({ showHidden: show })
+  },
+
+  // 「変更ファイルのみ表示」設定を切り替える（現在のプロジェクト root のキーに保存する）。
+  setShowOnlyChanged: (show: boolean) => {
+    localStorage.setItem(showOnlyChangedKey(get().root), show ? 'true' : 'false')
+    set({ showOnlyChanged: show })
   },
 
   // Git status を main から取得し直す。フォルダ未選択・非リポジトリ・失敗時は空にする。

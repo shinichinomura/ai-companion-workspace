@@ -267,6 +267,82 @@ function TreeNode({ node, depth, statuses, changedDirs }: TreeProps): JSX.Elemen
   )
 }
 
+// 「変更ファイルのみ表示」モードで並べる 1 エントリ。
+interface ChangedEntry {
+  relPath: string
+  // 表示名（末尾セグメント）。
+  name: string
+  // 所属ディレクトリの relPath（トップレベルは ''）。
+  dir: string
+  status: GitFileStatus
+}
+
+// gitStatuses から、変更ファイルのフラットなリストを relPath 順で組み立てる。
+function buildChangedEntries(statuses: Record<string, GitFileStatus>): ChangedEntry[] {
+  return Object.entries(statuses)
+    .map(([relPath, status]) => ({
+      relPath,
+      name: baseName(relPath),
+      dir: parentDir(relPath),
+      status
+    }))
+    .sort((a, b) => a.relPath.localeCompare(b.relPath))
+}
+
+// 「変更ファイルのみ表示」モードの 1 行。ツリーと違い階層を持たず、ファイル名 + 所属ディレクトリを並べる。
+function ChangedFileRow({ entry }: { entry: ChangedEntry }): JSX.Element {
+  const activeFile = useWorkspaceStore((s) => s.activeFile)
+  const openFile = useWorkspaceStore((s) => s.openFile)
+  const { openMenu, renamingPath, menuTargetPath, commitRename, cancelRename } = useExplorer()
+
+  const { relPath, name, dir, status } = entry
+  const node: FileNode = { relPath, name, isDirectory: false }
+  const isActive = activeFile?.relPath === relPath
+  // 削除（ファントム）行はディスク上に無いので開けない・操作できない。
+  const isDeleted = status === 'deleted'
+  const isRenaming = renamingPath === relPath
+  const isMenuTarget = menuTargetPath === relPath
+
+  const handleClick = (): void => {
+    if (isDeleted) return
+    void openFile(node)
+  }
+
+  const handleContextMenu = (e: React.MouseEvent): void => {
+    if (isDeleted) return
+    e.preventDefault()
+    openMenu(node, e.clientX, e.clientY)
+  }
+
+  return (
+    <div
+      className={`tree-row changed-row${isActive ? ' active' : ''}${isDeleted ? ' deleted' : ''}${isMenuTarget ? ' menu-target' : ''}`}
+      onClick={handleClick}
+      onContextMenu={handleContextMenu}
+      title={relPath}
+    >
+      <span className="tree-icon">📄</span>
+      {isRenaming ? (
+        <RenameInput
+          initialName={name}
+          onCommit={(newName) => commitRename(relPath, newName)}
+          onCancel={cancelRename}
+        />
+      ) : (
+        <>
+          <span className={`changed-name git-${status}`}>{name}</span>
+          {dir && <span className="changed-dir">{dir}</span>}
+        </>
+      )}
+      {!isRenaming && (
+        <span className={`tree-git git-${status}`} aria-label={status}>
+          {STATUS_LETTER[status]}
+        </span>
+      )}
+    </div>
+  )
+}
+
 // コンテキストメニューの 1 項目。
 interface MenuItem {
   label: string
@@ -383,6 +459,8 @@ function FileExplorer(): JSX.Element {
   const rootName = useWorkspaceStore((s) => s.rootName)
   const rootChildren = useWorkspaceStore((s) => s.childrenByDir[''])
   const showHidden = useWorkspaceStore((s) => s.showHidden)
+  const showOnlyChanged = useWorkspaceStore((s) => s.showOnlyChanged)
+  const setShowOnlyChanged = useWorkspaceStore((s) => s.setShowOnlyChanged)
   const gitStatuses = useWorkspaceStore((s) => s.gitStatuses)
   const renamePath = useWorkspaceStore((s) => s.renamePath)
 
@@ -437,6 +515,9 @@ function FileExplorer(): JSX.Element {
   // 変更を含むフォルダ集合は statuses が変わったときだけ作り直す。
   const changedDirs = useMemo(() => computeChangedDirs(gitStatuses), [gitStatuses])
 
+  // 「変更ファイルのみ表示」モード用のフラットなリスト。
+  const changedEntries = useMemo(() => buildChangedEntries(gitStatuses), [gitStatuses])
+
   // ルート直下も削除ファントムを合流させてから描画する。
   const rootNodes = rootChildren
     ? visibleNodes(withDeletedPhantoms('', rootChildren, gitStatuses), showHidden)
@@ -447,9 +528,36 @@ function FileExplorer(): JSX.Element {
       <div className="pane-inner">
         <div className="pane-header explorer-header">
           <span className="explorer-title">{rootName ?? 'Explorer'}</span>
+          {rootName && (
+            <button
+              type="button"
+              className={`explorer-toggle${showOnlyChanged ? ' on' : ''}`}
+              onClick={() => setShowOnlyChanged(!showOnlyChanged)}
+              title={showOnlyChanged ? 'すべてのファイルを表示' : '変更されたファイルのみ表示'}
+              aria-pressed={showOnlyChanged}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+                <circle cx="4" cy="3.5" r="1.8" />
+                <circle cx="4" cy="12.5" r="1.8" />
+                <circle cx="12" cy="8" r="1.8" />
+                <path d="M4 5.3v5.4" />
+                <path d="M5.7 4.2h2.8a1.8 1.8 0 0 1 1.8 1.8v.4" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="pane-body tree">
-          {rootNodes ? (
+          {rootNodes == null ? (
+            <RecentFolders />
+          ) : showOnlyChanged ? (
+            changedEntries.length > 0 ? (
+              changedEntries.map((entry) => (
+                <ChangedFileRow key={entry.relPath} entry={entry} />
+              ))
+            ) : (
+              <div className="placeholder">変更されたファイルはありません</div>
+            )
+          ) : (
             rootNodes.map((node) => (
               <TreeNode
                 key={node.relPath}
@@ -459,8 +567,6 @@ function FileExplorer(): JSX.Element {
                 changedDirs={changedDirs}
               />
             ))
-          ) : (
-            <RecentFolders />
           )}
         </div>
       </div>
