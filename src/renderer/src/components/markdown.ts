@@ -12,7 +12,9 @@ import rehypeSanitize from 'rehype-sanitize'
 import rehypeStringify from 'rehype-stringify'
 import { visit, SKIP } from 'unist-util-visit'
 import { VFile } from 'vfile'
-import yaml from 'js-yaml'
+// js-yaml 4.x は ESM ビルドが名前付き export のみ（default export を持たない）ため、
+// `import yaml from 'js-yaml'` だと実行時に "no default export" で落ちる。名前付きで取り込む。
+import { load as loadYaml } from 'js-yaml'
 import type { Root as HastRoot } from 'hast'
 import type { Root as MdastRoot, Table, TableRow } from 'mdast'
 import { mediaUrl } from '../../../shared/ipc'
@@ -79,7 +81,7 @@ function remarkFrontmatterTable() {
       if (!parent || typeof index !== 'number') return
       let data: unknown
       try {
-        data = yaml.load(node.value)
+        data = loadYaml(node.value)
       } catch {
         data = null
       }
