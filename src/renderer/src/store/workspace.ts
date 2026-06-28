@@ -293,7 +293,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     try {
       await openFileInternal(relPath, name, get, set, false)
     } catch {
-      // 履歴上のファイルが削除された等で開けない場合は、index だけ移動した状態にする。
+      // 履歴上のファイルが削除された等で開けない場合は index だけ移動した状態にする。
     }
   },
 

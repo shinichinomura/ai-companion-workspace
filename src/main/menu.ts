@@ -185,7 +185,19 @@ export function buildAppMenu(): void {
         },
         { type: 'separator' },
         { role: 'reload' },
-        { role: 'toggleDevTools' },
+        {
+          // 各タブは WebContentsView でメインウィンドウ内に置かれるため、既定の
+          // toggleDevTools（ドッキング表示）だと UI に重なって見えない。
+          // アクティブタブの DevTools を必ず別ウィンドウ（detach）で開閉する。
+          label: 'デベロッパーツール',
+          accelerator: process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
+          click: () => {
+            const wc = getActiveTabWebContents()
+            if (!wc) return
+            if (wc.isDevToolsOpened()) wc.closeDevTools()
+            else wc.openDevTools({ mode: 'detach' })
+          }
+        },
         { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },

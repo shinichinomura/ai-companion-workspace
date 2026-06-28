@@ -39,8 +39,6 @@ function App(): JSX.Element {
   const openFolder = useWorkspaceStore((s) => s.openFolder)
   const openFolderByPath = useWorkspaceStore((s) => s.openFolderByPath)
   const refreshGitStatus = useWorkspaceStore((s) => s.refreshGitStatus)
-  const goBack = useWorkspaceStore((s) => s.goBack)
-  const goForward = useWorkspaceStore((s) => s.goForward)
   const loadSettings = useSettingsStore((s) => s.load)
   // 現在のプロジェクト root。UI 設定（レイアウト等）の保存キーに使う。
   const root = useWorkspaceStore((s) => s.root)
@@ -76,37 +74,6 @@ function App(): JSX.Element {
       window.removeEventListener('drop', prevent)
     }
   }, [])
-
-  // マウスのサイドボタン（戻る/進む）でファイル履歴を移動する。
-  // Chromium は button 3=戻る / 4=進む を既定でページ履歴ナビゲーションに使うため、
-  // preventDefault でその既定動作（SPA からの離脱）を抑止し、自前の履歴移動に振り替える。
-  // capture フェーズで拾い、各ペイン（エディタ・ターミナル等）より先に処理する。
-  // 実処理は mousedown 一回のみ。mouseup / auxclick は既定ナビ抑止のために潰すだけ。
-  useEffect(() => {
-    const onMouseDown = (e: MouseEvent): void => {
-      // 診断用ログ（サイドボタンの DOM イベントが届くか・button 番号の確認用）。
-      // 切り分けが済んだら削除する。
-      if (e.button >= 3) console.debug('[history-nav] mousedown button=', e.button)
-      if (e.button === 3) {
-        e.preventDefault()
-        void goBack()
-      } else if (e.button === 4) {
-        e.preventDefault()
-        void goForward()
-      }
-    }
-    const suppress = (e: MouseEvent): void => {
-      if (e.button === 3 || e.button === 4) e.preventDefault()
-    }
-    window.addEventListener('mousedown', onMouseDown, true)
-    window.addEventListener('mouseup', suppress, true)
-    window.addEventListener('auxclick', suppress, true)
-    return () => {
-      window.removeEventListener('mousedown', onMouseDown, true)
-      window.removeEventListener('mouseup', suppress, true)
-      window.removeEventListener('auxclick', suppress, true)
-    }
-  }, [goBack, goForward])
 
   useEffect(() => {
     const el = workRef.current
