@@ -1,7 +1,12 @@
 import { app, shell, BrowserWindow, Notification, WebContentsView, ipcMain } from 'electron'
 import { basename, join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import { IpcChannel, type TabsState } from '../shared/ipc'
+import {
+  IpcChannel,
+  type TabsState,
+  type TerminalActivateMessage,
+  type TerminalBellMessage
+} from '../shared/ipc'
 import { getProjectRoot, setRootChangedListener } from './workspace'
 import { syncMenuChecks, forgetTabMenuState, refreshRecentMenu } from './menu'
 import { loadSession, saveSession } from './session'
@@ -161,35 +166,43 @@ function closeTab(id: number): void {
   persistSession()
 }
 
-// ベル通知の連打を抑えるためのスロットル間隔（ms）と、タブごとの最終通知時刻。
+// ベル通知の連打を抑えるためのスロットル間隔（ms）と、ターミナルごとの最終通知時刻。
 // claude CLI は操作待ちで複数回ベルを鳴らすことがあるため、短時間の重複通知を間引く。
+// キーは `${アプリタブの webContents.id}:${ターミナル id}`。同一アプリタブ内でも別ターミナルなら
+// それぞれ通知できるよう、ターミセル単位でスロットルする。
 const BELL_THROTTLE_MS = 2000
-const lastBellAt = new Map<number, number>()
+const lastBellAt = new Map<string, number>()
 
 // ターミナルでベルが鳴ったときの処理。送信元タブが「フォアグラウンドで表示中」なら
 // ユーザーは既に見ているので何もしない。非アクティブ（別タブ／ウィンドウ非フォーカス／
-// 別アプリ）のときだけ OS 通知を出し、クリックでそのタブへ復帰できるようにする。
-function handleTerminalBell(wcId: number): void {
+// 別アプリ）のときだけ OS 通知を出し、クリックでそのアプリタブ＋発生元ターミナルへ復帰できるようにする。
+// なお「アクティブなアプリタブ」でも、別のターミナル（サブタブ）が鳴らした場合はユーザーが
+// それを見ているとは限らないため通知する（クリックでそのターミナルへ切り替わる）。
+function handleTerminalBell(wcId: number, terminalId: string, num: number): void {
   if (!win || win.isDestroyed()) return
   const tab = tabs.find((t) => t.id === wcId)
   if (!tab) return
 
   // ユーザーがこのタブを見ている最中（ウィンドウがフォーカス済み かつ アクティブタブ）は通知しない。
+  // 別ターミナルが鳴らしたケースも、どのターミナルがアクティブかは renderer 側の状態なので
+  // ここでは区別できない。アクティブアプリタブを見ているなら気づける前提で抑制する。
   if (win.isFocused() && activeId === wcId) return
 
-  // 連打スロットル。
+  // 連打スロットル（ターミナル単位）。
+  const key = `${wcId}:${terminalId}`
   const now = Date.now()
-  const prev = lastBellAt.get(wcId) ?? 0
+  const prev = lastBellAt.get(key) ?? 0
   if (now - prev < BELL_THROTTLE_MS) return
-  lastBellAt.set(wcId, now)
+  lastBellAt.set(key, now)
 
   if (!Notification.isSupported()) return
   const notification = new Notification({
     title: tab.title,
-    body: 'ターミナルが操作待ちです',
+    body: `ターミナル ${num} が操作待ちです`,
     silent: false
   })
-  // 通知クリックでウィンドウを前面に出し、該当タブへ切り替える。
+  // 通知クリックでウィンドウを前面に出し、該当アプリタブへ切り替え、さらにその中の
+  // 発生元ターミナル（サブタブ）をアクティブにするよう renderer へ促す。
   notification.on('click', () => {
     if (!win || win.isDestroyed()) return
     if (win.isMinimized()) win.restore()
@@ -198,6 +211,11 @@ function handleTerminalBell(wcId: number): void {
     // 別アプリにフォーカスがある場合に Noetelier を前面化する（macOS）。
     if (process.platform === 'darwin') app.focus({ steal: true })
     activateTab(wcId)
+    const target = tabs.find((t) => t.id === wcId)
+    if (target && !target.view.webContents.isDestroyed()) {
+      const payload: TerminalActivateMessage = { id: terminalId }
+      target.view.webContents.send(IpcChannel.TerminalActivate, payload)
+    }
   })
   notification.show()
 }
@@ -329,5 +347,7 @@ export function registerTabHandlers(): void {
   ipcMain.on(IpcChannel.TabActivate, (_e, id: number) => activateTab(id))
   ipcMain.on(IpcChannel.TabClose, (_e, id: number) => closeTab(id))
   // 送信元タブ（e.sender.id）でベルが鳴った。非アクティブ時のみ OS 通知を出す。
-  ipcMain.on(IpcChannel.TerminalBell, (e) => handleTerminalBell(e.sender.id))
+  ipcMain.on(IpcChannel.TerminalBell, (e, msg: TerminalBellMessage) =>
+    handleTerminalBell(e.sender.id, msg.id, msg.num)
+  )
 }

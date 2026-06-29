@@ -41,6 +41,9 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
 
   const [tabs, setTabs] = useState<TermTab[]>(() => [makeTab()])
   const [activeId, setActiveId] = useState<string>(() => tabs[0].id)
+  // ベル通知クリックからの「このターミナルを開いて」要求で、存在チェックに使う最新の tabs。
+  const tabsRef = useRef(tabs)
+  tabsRef.current = tabs
   // 各ターミナルの終了状態。アクティブなターミナルが終了していたら再起動ボタンを出す。
   const [exited, setExited] = useState<Record<string, boolean>>({})
 
@@ -97,6 +100,15 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
   const restartActive = (): void => {
     handlesRef.current.get(activeId)?.restart()
   }
+
+  // ベル通知のクリックで、発生元ターミナル（サブタブ）をアクティブにする。
+  // 既に閉じられている場合は何もしない。アプリタブ自体の切替は main 側で行う。
+  useEffect(() => {
+    const unsubscribe = window.api.onActivateTerminal((id) => {
+      if (tabsRef.current.some((t) => t.id === id)) setActiveId(id)
+    })
+    return unsubscribe
+  }, [])
 
   // 定型プロンプトのメニューを開いている間は、外側クリックと Escape で閉じる。
   useEffect(() => {
@@ -257,6 +269,7 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
             <TerminalInstance
               key={t.id}
               id={t.id}
+              num={t.num}
               active={t.id === activeId}
               collapsed={collapsed}
               setHandle={setHandle}

@@ -13,6 +13,8 @@ import {
   type ReadDirRequest,
   type ReadFileRequest,
   type TabsState,
+  type TerminalActivateMessage,
+  type TerminalBellMessage,
   type TerminalDataMessage,
   type TerminalDisposeRequest,
   type TerminalExit,
@@ -91,7 +93,12 @@ const api: WorkspaceApi = {
     ipcRenderer.on(IpcChannel.TerminalExit, listener)
     return () => ipcRenderer.removeListener(IpcChannel.TerminalExit, listener)
   },
-  notifyTerminalBell: () => ipcRenderer.send(IpcChannel.TerminalBell),
+  notifyTerminalBell: (msg: TerminalBellMessage) => ipcRenderer.send(IpcChannel.TerminalBell, msg),
+  onActivateTerminal: (cb: (id: string) => void) => {
+    const listener = (_e: unknown, msg: TerminalActivateMessage): void => cb(msg.id)
+    ipcRenderer.on(IpcChannel.TerminalActivate, listener)
+    return () => ipcRenderer.removeListener(IpcChannel.TerminalActivate, listener)
+  },
   // drag & drop された File から OS 上の絶対パスを得る。
   // Electron 32+ では File.path が廃止されたため webUtils を使う（renderer から直接は触れない）。
   getPathForFile: (file: File) => webUtils.getPathForFile(file),

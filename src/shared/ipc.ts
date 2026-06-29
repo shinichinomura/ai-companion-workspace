@@ -64,8 +64,11 @@ export const IpcChannel = {
   TerminalData: 'terminal:data', // M→R push: PTY 出力
   TerminalExit: 'terminal:exit', // M→R push: プロセス終了通知
   // R→M send: ターミナルでベル（\x07）が鳴った。main は非アクティブ時に OS 通知を出す。
-  // claude CLI が操作待ち（入力・許可待ち）になると鳴らすベルを拾う用途。
-  TerminalBell: 'terminal:bell'
+  // claude CLI が操作待ち（入力・許可待ち）になると鳴らすベルを拾う用途。どのターミナルが
+  // 鳴らしたかを id で示し、通知クリック時にそのターミナルへ復帰できるようにする。
+  TerminalBell: 'terminal:bell',
+  // M→R push: ベル通知のクリックで、該当ターミナル（サブタブ）をアクティブにするよう促す。
+  TerminalActivate: 'terminal:activate'
 } as const
 
 // Markdown プレビューで画像を表示するためのカスタムスキーム。
@@ -296,6 +299,18 @@ export interface TerminalExit {
   exitCode: number
 }
 
+// terminal:bell の送信。どのターミナルが鳴らしたか（id）と表示番号（num）を渡す。
+// num は OS 通知に「ターミナル N」と出して発生元を分かりやすくするために使う。
+export interface TerminalBellMessage {
+  id: string
+  num: number
+}
+
+// terminal:activate の通知。クリックされたベル通知の発生元ターミナルを id で示す。
+export interface TerminalActivateMessage {
+  id: string
+}
+
 // renderer に公開する API の型。preload で実装し window.api として参照する。
 export interface WorkspaceApi {
   openFolder: () => Promise<OpenFolderResult | null>
@@ -349,7 +364,9 @@ export interface WorkspaceApi {
   // プロセス終了を購読する。返り値は購読解除関数。
   onTerminalExit: (cb: (exit: TerminalExit) => void) => () => void
   // ターミナルでベルが鳴ったことを main に通知する。main 側で非アクティブ時に OS 通知を出す。
-  notifyTerminalBell: () => void
+  notifyTerminalBell: (msg: TerminalBellMessage) => void
+  // ベル通知のクリックで発生元ターミナルへ復帰する指示を購読する。返り値は購読解除関数。
+  onActivateTerminal: (cb: (id: string) => void) => () => void
   // drag & drop された File の OS 上の絶対パスを得る（Electron 32+ で File.path が廃止されたため）。
   getPathForFile: (file: File) => string
 
