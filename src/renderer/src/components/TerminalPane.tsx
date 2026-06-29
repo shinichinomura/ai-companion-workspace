@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Terminal } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
-import '@xterm/xterm/css/xterm.css'
 import { useWorkspaceStore } from '../store/workspace'
 import { useSettingsStore } from '../store/settings'
 import type { WorkLayout } from '../../../shared/ipc'
+import TerminalInstance, { type TerminalHandle } from './TerminalInstance'
 
 interface TerminalPaneProps {
   // 折りたたみ中か。ヘッダーバーのアイコン向きと本体の表示/非表示に使う。
@@ -15,180 +13,89 @@ interface TerminalPaneProps {
   layout: WorkLayout
 }
 
+// タブ内の 1 ターミナル。id は PTY と対応する識別子、num は表示用の連番（閉じてもずれない）。
+interface TermTab {
+  id: string
+  num: number
+}
+
 // 右ペイン: 統合ターミナル（spec 2.2.4）。
-// xterm.js（renderer）と node-pty（main）を IPC で接続する。
-// MVP は単一インスタンス。フォルダ未選択時は起動せず、root が変わったら再起動する。
+// 1 つのアプリタブ内で複数のターミナルをタブで開ける。各ターミナルは TerminalInstance が
+// xterm.js（renderer）と node-pty（main）を IPC で結びつけて保持し、非アクティブなものも
+// マウントしたまま隠す（PTY を保持する）。フォルダ未選択時は起動しない。
 function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.Element {
-  // project root。変化したらターミナルを張り替える（cwd を新 root にする）。
+  // project root。未選択ならターミナルは起動しない。root 変更時は App 側で本コンポーネントごと
+  // 再マウントされる（rootKey による key 付け）ため、初期状態（ターミナル 1 つ）から作り直る。
   const root = useWorkspaceStore((s) => s.root)
-  // よく使う Git 操作のボタン定義（設定画面で編集可能）。押すと prompt を統合ターミナルに送る。
+  // よく使う Git 操作のボタン定義（設定画面で編集可能）。押すとアクティブな統合ターミナルへ prompt を送る。
   // 送信先はユーザーが見ている統合ターミナル。Claude が対話モードで起動している前提の
   // ショートカットで、裏でプロンプトを投入するものではない（spec 設計原則）。
   const quickPrompts = useSettingsStore((s) => s.quickPrompts)
-  const containerRef = useRef<HTMLDivElement>(null)
-  // 折りたたみから復帰したときにサイズを測り直すため、fit/term を保持する。
-  const fitRef = useRef<FitAddon | null>(null)
-  const termRef = useRef<Terminal | null>(null)
-  // PTY 起動処理を header の再起動ボタンからも呼べるよう ref に保持する。
-  const startPtyRef = useRef<(() => void) | null>(null)
-  // PTY が終了済みかどうか。終了時のみ再起動ボタンを出すために使う。
-  const [exited, setExited] = useState(false)
-  // ファイルを drag 中かどうか。ドロップ可能であることを視覚的に示すために使う。
-  const [dragOver, setDragOver] = useState(false)
-  // 定型プロンプトのメニューを開いているか。ヘッダーのアイコンを押すと展開する。
-  const [promptMenuOpen, setPromptMenuOpen] = useState(false)
-  // メニューの外側クリック判定のため、トリガー＋メニュー全体を包む要素を保持する。
-  const promptMenuRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    // フォルダ未選択時はターミナルを起動しない。
-    if (!root || !containerRef.current) return
-
-    // xterm 本体と FitAddon を生成する。
-    const term = new Terminal({
-      cursorBlink: true,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
-      // ペインの配色に合わせた最低限のテーマ。背景は CSS の --bg-pane(#252526) と揃える。
-      theme: { background: '#252526', foreground: '#d4d4d4' }
-    })
-    const fitAddon = new FitAddon()
-    term.loadAddon(fitAddon)
-    term.open(containerRef.current)
-    fitRef.current = fitAddon
-    termRef.current = term
-
-    // コンテナのサイズに合わせて端末サイズを確定する。
-    // 初回はレイアウト確定後に測りたいため、サイズが取れるまで安全側に倒す。
-    fitAddon.fit()
-
-    // PTY を起動する。初回起動と、終了後の再起動の両方で使う。
-    let disposed = false
-    const startPty = (): void => {
-      if (disposed) return
-      // 再起動時はコンテナサイズが変わっている可能性があるので測り直す。
-      try {
-        fitAddon.fit()
-      } catch {
-        // サイズが取れないタイミングは無視する。
-      }
-      setExited(false)
-      void window.api.terminalStart({ cols: term.cols, rows: term.rows }).then((res) => {
-        if (disposed) return
-        if (res.error) {
-          term.writeln(`\x1b[31m${res.error}\x1b[0m`)
-          setExited(true)
-        }
-      })
-    }
-    startPtyRef.current = startPty
-    startPty()
-
-    // ユーザー入力 → main(PTY)。
-    const inputSub = term.onData((data) => {
-      window.api.terminalInput(data)
-    })
-
-    // ベル（\x07）を main に通知する。claude CLI が操作待ちになると鳴らすため、
-    // アプリが非アクティブ／別タブのときに main 側で OS 通知を出す。
-    const bellSub = term.onBell(() => {
-      window.api.notifyTerminalBell()
-    })
-
-    // PTY 出力 → xterm。
-    const offData = window.api.onTerminalData((data) => {
-      if (!disposed) term.write(data)
-    })
-
-    // プロセス終了通知。再起動ボタンを出すため exited を立てる。
-    const offExit = window.api.onTerminalExit(({ exitCode }) => {
-      if (!disposed) {
-        term.writeln(`\r\n\x1b[90m[プロセスが終了しました (code ${exitCode})]\x1b[0m`)
-        setExited(true)
-      }
-    })
-
-    // ペインのリサイズに追従し、サイズ変更を main に伝える。
-    const resizeObserver = new ResizeObserver(() => {
-      try {
-        fitAddon.fit()
-        window.api.terminalResize({ cols: term.cols, rows: term.rows })
-      } catch {
-        // コンテナが一時的に 0 サイズの場合などは無視する。
-      }
-    })
-    resizeObserver.observe(containerRef.current)
-
-    return () => {
-      disposed = true
-      resizeObserver.disconnect()
-      inputSub.dispose()
-      bellSub.dispose()
-      offData()
-      offExit()
-      // main 側の PTY も破棄する（root 切替・アンマウント時）。
-      window.api.terminalDispose()
-      term.dispose()
-      fitRef.current = null
-      termRef.current = null
-      startPtyRef.current = null
-    }
-  }, [root])
-
-  // 終了したターミナルを再起動する。header の再起動ボタンから呼ぶ。
-  const restartTerminal = (): void => {
-    const term = termRef.current
-    if (!term) return
-    // 前回の出力を消してから起動し直し、画面を綺麗にする。
-    term.reset()
-    startPtyRef.current?.()
-    term.focus()
+  // ターミナルに振る連番。閉じても再利用せず、表示番号を安定させる。
+  const counterRef = useRef(0)
+  const makeTab = (): TermTab => {
+    counterRef.current += 1
+    return { id: `t${counterRef.current}`, num: counterRef.current }
   }
 
-  // 定型プロンプトをそのまま PTY に送る（末尾に改行 \r を付けて即実行）。
-  // 送信先はユーザーが見ている統合ターミナルなので、折りたたみ中なら開いて見せる。
+  const [tabs, setTabs] = useState<TermTab[]>(() => [makeTab()])
+  const [activeId, setActiveId] = useState<string>(() => tabs[0].id)
+  // 各ターミナルの終了状態。アクティブなターミナルが終了していたら再起動ボタンを出す。
+  const [exited, setExited] = useState<Record<string, boolean>>({})
+
+  // 各 TerminalInstance が登録する操作ハンドル（フォーカス・送信・再起動）。
+  const handlesRef = useRef<Map<string, TerminalHandle>>(new Map())
+  const setHandle = (id: string, handle: TerminalHandle | null): void => {
+    if (handle) handlesRef.current.set(id, handle)
+    else handlesRef.current.delete(id)
+  }
+  const handleExitedChange = (id: string, ex: boolean): void => {
+    setExited((m) => ({ ...m, [id]: ex }))
+  }
+
+  // 定型プロンプトのメニューを開いているか。
+  const [promptMenuOpen, setPromptMenuOpen] = useState(false)
+  const promptMenuRef = useRef<HTMLDivElement>(null)
+
+  // 新しいターミナルを追加してアクティブにする。
+  const addTerminal = (): void => {
+    const t = makeTab()
+    setTabs((ts) => [...ts, t])
+    setActiveId(t.id)
+  }
+
+  // 指定ターミナルを閉じる。最後の 1 つは残す（ペインを空にしない）。
+  const closeTerminal = (id: string): void => {
+    if (tabs.length <= 1) return
+    const idx = tabs.findIndex((t) => t.id === id)
+    const next = tabs.filter((t) => t.id !== id)
+    setTabs(next)
+    // 閉じたのがアクティブなら、隣（できるだけ右、無ければ左）をアクティブにする。
+    if (id === activeId) {
+      const fallback = next[Math.min(idx, next.length - 1)]
+      setActiveId(fallback.id)
+    }
+    setExited((m) => {
+      const c = { ...m }
+      delete c[id]
+      return c
+    })
+  }
+
+  // 定型プロンプトをアクティブなターミナルへ送る（末尾に改行 \r を付けて即実行）。
+  // 折りたたみ中なら開いて見せる。
   const sendPrompt = (prompt: string): void => {
     if (!root) return
     if (collapsed) onToggle()
-    window.api.terminalInput(prompt + '\r')
-    // 入力後の文字がターミナルに反映されるよう、フォーカスを端末本体へ戻す。
-    termRef.current?.focus()
+    const handle = handlesRef.current.get(activeId)
+    handle?.sendText(prompt + '\r')
+    handle?.focus()
   }
 
-  // ターミナルへドロップしたファイルパスを、シェルでそのまま使える形にエスケープする。
-  // 標準ターミナルへのドロップと同じく、空白やシェル特殊文字を backslash で退避する。
-  const escapePath = (p: string): string => p.replace(/([ !"#$&'()*,;<>?@[\\\]^`{|}~])/g, '\\$1')
-
-  // ファイルがターミナル本体にドロップされたとき。
-  // 各ファイルの絶対パスをエスケープして空白区切りで挿入する（改行は付けず実行はしない）。
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault()
-    setDragOver(false)
-    if (!root) return
-    const files = Array.from(e.dataTransfer.files)
-    if (files.length === 0) return
-    const text = files
-      .map((f) => escapePath(window.api.getPathForFile(f)))
-      .filter((p) => p.length > 0)
-      .join(' ')
-    if (!text) return
-    // 末尾に空白を付けて、続けて入力しやすくする（標準ターミナルの挙動に合わせる）。
-    window.api.terminalInput(text + ' ')
-    termRef.current?.focus()
-  }
-
-  // drag 中はドロップを受け付けるため preventDefault が必須。
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>): void => {
-    if (e.dataTransfer.types.includes('Files')) {
-      e.preventDefault()
-      e.dataTransfer.dropEffect = 'copy'
-      if (!dragOver) setDragOver(true)
-    }
-  }
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>): void => {
-    // 子要素間の移動では leave が誤発火するため、コンテナ外に出たときだけ解除する。
-    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false)
+  // 終了したアクティブターミナルを再起動する。
+  const restartActive = (): void => {
+    handlesRef.current.get(activeId)?.restart()
   }
 
   // 定型プロンプトのメニューを開いている間は、外側クリックと Escape で閉じる。
@@ -208,26 +115,55 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
     }
   }, [promptMenuOpen])
 
-  // 折りたたみから表示に戻ったらサイズを測り直す（非表示中は 0 サイズなので fit がずれる）。
-  useEffect(() => {
-    if (collapsed) return
-    const id = requestAnimationFrame(() => {
-      try {
-        fitRef.current?.fit()
-        const t = termRef.current
-        if (t) window.api.terminalResize({ cols: t.cols, rows: t.rows })
-      } catch {
-        // サイズが取れないタイミングは無視する。
-      }
-    })
-    return () => cancelAnimationFrame(id)
-  }, [collapsed])
-
   return (
     <div className="pane-inner">
-      {/* 開閉バー。折りたたんでもこのバーだけは残る。 */}
+      {/* 開閉バー兼タブバー。折りたたんでもこのバーだけは残る。 */}
       <div className="terminal-header">
-        <span>Terminal</span>
+        {/* ターミナルのタブ。各タブはクリックで切替、× で閉じる。+ で新規追加。 */}
+        <div className="terminal-tabs" role="tablist">
+          {tabs.map((t) => (
+            <div
+              key={t.id}
+              className={`terminal-tab${t.id === activeId ? ' active' : ''}`}
+              role="tab"
+              aria-selected={t.id === activeId}
+              onClick={() => setActiveId(t.id)}
+              title={`ターミナル ${t.num}`}
+            >
+              <span className="terminal-tab-label">
+                {/* 終了済みのターミナルは印を付けて分かるようにする。 */}
+                {exited[t.id] ? '○ ' : ''}
+                {t.num}
+              </span>
+              {tabs.length > 1 && (
+                <button
+                  type="button"
+                  className="terminal-tab-close"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    closeTerminal(t.id)
+                  }}
+                  title="このターミナルを閉じる"
+                  aria-label="このターミナルを閉じる"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+          {/* 新規ターミナルを追加する。 */}
+          <button
+            type="button"
+            className="terminal-tab-add"
+            onClick={addTerminal}
+            disabled={!root}
+            title="ターミナルを追加"
+            aria-label="ターミナルを追加"
+          >
+            +
+          </button>
+        </div>
+
         {/* よく使う Git 操作を Claude に送る定型プロンプト。ヘッダーにはアイコンだけを置き、
             押すと登録済みの選択肢をメニューとして展開する（設定画面で編集可能）。
             ラベルが空の行は表示しない。 */}
@@ -279,12 +215,12 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
             </div>
           )
         })()}
-        {/* PTY が終了したときだけ再起動ボタンを出す。押すと同じ cwd でシェルを起動し直す。 */}
-        {root && exited && (
+        {/* アクティブな PTY が終了したときだけ再起動ボタンを出す。押すと同じ cwd で起動し直す。 */}
+        {root && exited[activeId] && (
           <button
             type="button"
             className="terminal-restart-btn"
-            onClick={restartTerminal}
+            onClick={restartActive}
             title="ターミナルを再起動する"
           >
             ↻ 再起動
@@ -313,16 +249,20 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
           </button>
         )}
       </div>
-      {/* 折りたたみ中は本体を display:none で隠す。xterm 自体はマウントしたままにして PTY を保持する。 */}
+      {/* 折りたたみ中は本体を display:none で隠す。各 xterm はマウントしたままにして PTY を保持する。 */}
       <div className="terminal-content" style={{ display: collapsed ? 'none' : undefined }}>
         {root ? (
-          <div
-            ref={containerRef}
-            className={`terminal-body${dragOver ? ' drag-over' : ''}`}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-          />
+          // すべてのターミナルをマウントし続け、アクティブなものだけ表示する（PTY を保持）。
+          tabs.map((t) => (
+            <TerminalInstance
+              key={t.id}
+              id={t.id}
+              active={t.id === activeId}
+              collapsed={collapsed}
+              setHandle={setHandle}
+              onExitedChange={handleExitedChange}
+            />
+          ))
         ) : (
           <div className="pane-body placeholder">フォルダを開くとターミナルが起動します</div>
         )}

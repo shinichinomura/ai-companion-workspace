@@ -13,7 +13,10 @@ import {
   type ReadDirRequest,
   type ReadFileRequest,
   type TabsState,
+  type TerminalDataMessage,
+  type TerminalDisposeRequest,
   type TerminalExit,
+  type TerminalInputMessage,
   type TerminalResizeRequest,
   type TerminalStartRequest,
   type WriteFileRequest,
@@ -74,11 +77,12 @@ const api: WorkspaceApi = {
   setAppSettings: (settings: AppSettings) => ipcRenderer.invoke(IpcChannel.SettingsSet, settings),
 
   terminalStart: (req: TerminalStartRequest) => ipcRenderer.invoke(IpcChannel.TerminalStart, req),
-  terminalInput: (data: string) => ipcRenderer.send(IpcChannel.TerminalInput, data),
+  terminalInput: (msg: TerminalInputMessage) => ipcRenderer.send(IpcChannel.TerminalInput, msg),
   terminalResize: (req: TerminalResizeRequest) => ipcRenderer.send(IpcChannel.TerminalResize, req),
-  terminalDispose: () => ipcRenderer.send(IpcChannel.TerminalDispose),
-  onTerminalData: (cb: (data: string) => void) => {
-    const listener = (_e: unknown, data: string): void => cb(data)
+  terminalDispose: (req: TerminalDisposeRequest) =>
+    ipcRenderer.send(IpcChannel.TerminalDispose, req),
+  onTerminalData: (cb: (msg: TerminalDataMessage) => void) => {
+    const listener = (_e: unknown, msg: TerminalDataMessage): void => cb(msg)
     ipcRenderer.on(IpcChannel.TerminalData, listener)
     return () => ipcRenderer.removeListener(IpcChannel.TerminalData, listener)
   },

@@ -55,7 +55,8 @@ export const IpcChannel = {
   // shell→M send: 指定タブを閉じる。
   TabClose: 'tabs:close',
 
-  // 統合ターミナル（spec 2.2.4）。タブ（webContents）単位で PTY を保持する。
+  // 統合ターミナル（spec 2.2.4）。1 タブ（webContents）内に複数のターミナルをタブで持てる。
+  // PTY は (webContents.id, terminalId) の組で一意に保持する。terminalId は各メッセージに含める。
   TerminalStart: 'terminal:start', // R→M invoke: cwd(project root) で PTY 起動
   TerminalInput: 'terminal:input', // R→M send: キー入力を PTY に書き込む
   TerminalResize: 'terminal:resize', // R→M send: cols/rows 変更
@@ -252,8 +253,9 @@ export interface FsEventBatch {
   changes: FsChange[]
 }
 
-// terminal:start のリクエスト。初期サイズを渡す（FitAddon の測定結果）。
+// terminal:start のリクエスト。terminalId（タブ内でのターミナル識別子）と初期サイズを渡す。
 export interface TerminalStartRequest {
+  id: string
   cols: number
   rows: number
 }
@@ -264,14 +266,33 @@ export interface TerminalStartResult {
   error?: string
 }
 
+// terminal:input の送信。どのターミナルへの入力かを id で指定する。
+export interface TerminalInputMessage {
+  id: string
+  data: string
+}
+
 // terminal:resize のリクエスト。
 export interface TerminalResizeRequest {
+  id: string
   cols: number
   rows: number
 }
 
-// terminal:exit の通知。シェルプロセスの終了コード。
+// terminal:dispose のリクエスト。破棄するターミナルを id で指定する。
+export interface TerminalDisposeRequest {
+  id: string
+}
+
+// terminal:data の通知。どのターミナルの出力かを id で示す。
+export interface TerminalDataMessage {
+  id: string
+  data: string
+}
+
+// terminal:exit の通知。どのターミナルが終了したかと、シェルプロセスの終了コード。
 export interface TerminalExit {
+  id: string
   exitCode: number
 }
 
@@ -318,13 +339,13 @@ export interface WorkspaceApi {
   // アプリ設定を保存する。main 側で正規化した結果を返す。
   setAppSettings: (settings: AppSettings) => Promise<AppSettings>
 
-  // 統合ターミナル。project root を cwd に PTY を起動する。
+  // 統合ターミナル。project root を cwd に、id で識別する PTY を起動する。
   terminalStart: (req: TerminalStartRequest) => Promise<TerminalStartResult>
-  terminalInput: (data: string) => void
+  terminalInput: (msg: TerminalInputMessage) => void
   terminalResize: (req: TerminalResizeRequest) => void
-  terminalDispose: () => void
-  // PTY 出力を購読する。返り値は購読解除関数。
-  onTerminalData: (cb: (data: string) => void) => () => void
+  terminalDispose: (req: TerminalDisposeRequest) => void
+  // PTY 出力を購読する。msg.id でターミナルを判別する。返り値は購読解除関数。
+  onTerminalData: (cb: (msg: TerminalDataMessage) => void) => () => void
   // プロセス終了を購読する。返り値は購読解除関数。
   onTerminalExit: (cb: (exit: TerminalExit) => void) => () => void
   // ターミナルでベルが鳴ったことを main に通知する。main 側で非アクティブ時に OS 通知を出す。

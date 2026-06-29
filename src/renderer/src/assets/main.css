@@ -159,6 +159,104 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/* ターミナルのタブ列。ヘッダー左側に並べ、はみ出したら横スクロールさせる。 */
+.terminal-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  /* スクロールバーは出さず、必要時のみ内部でスクロールできれば十分。 */
+  scrollbar-width: none;
+}
+.terminal-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* タブ 1 つ。番号と閉じるボタンを横並びにする。 */
+.terminal-tab {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 4px 0 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fg-dim);
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+.terminal-tab:hover {
+  background: #2d2d2d;
+  color: var(--fg);
+}
+
+/* アクティブなタブは本体（ペイン背景）と地続きに見せる。 */
+.terminal-tab.active {
+  background: var(--bg-pane);
+  color: var(--fg);
+}
+
+.terminal-tab-label {
+  white-space: nowrap;
+}
+
+/* タブ内の閉じるボタン。 */
+.terminal-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.terminal-tab-close:hover {
+  background: #444;
+  color: var(--fg);
+}
+
+/* タブを追加する + ボタン。 */
+.terminal-tab-add {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.terminal-tab-add:hover:not(:disabled) {
+  background: #333;
+  color: var(--fg);
+}
+
+.terminal-tab-add:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* 定型プロンプトのトリガー。タイトルを左に寄せ、アイコンとトグルを右側にまとめる。
    メニューを絶対配置で吊るすため relative にする。 */
 .terminal-actions {
