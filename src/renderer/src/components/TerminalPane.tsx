@@ -101,6 +101,12 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
     handlesRef.current.get(activeId)?.restart()
   }
 
+  // 現在アクティブなターミナルを main に報告する。main はこれを使って
+  // 「今まさに見ているターミナルが鳴ったとき」だけベル通知を抑制する。
+  useEffect(() => {
+    window.api.reportActiveTerminal(activeId)
+  }, [activeId])
+
   // ベル通知のクリックで、発生元ターミナル（サブタブ）をアクティブにする。
   // 既に閉じられている場合は何もしない。アプリタブ自体の切替は main 側で行う。
   useEffect(() => {

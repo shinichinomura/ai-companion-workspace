@@ -68,7 +68,10 @@ export const IpcChannel = {
   // 鳴らしたかを id で示し、通知クリック時にそのターミナルへ復帰できるようにする。
   TerminalBell: 'terminal:bell',
   // M→R push: ベル通知のクリックで、該当ターミナル（サブタブ）をアクティブにするよう促す。
-  TerminalActivate: 'terminal:activate'
+  TerminalActivate: 'terminal:activate',
+  // R→M send: そのアプリタブで現在アクティブなターミナル（サブタブ）の id を報告する。
+  // main は「今まさに見ているターミナルが鳴ったときだけ」通知を抑制するために使う。
+  TerminalActiveChanged: 'terminal:active-changed'
 } as const
 
 // Markdown プレビューで画像を表示するためのカスタムスキーム。
@@ -311,6 +314,11 @@ export interface TerminalActivateMessage {
   id: string
 }
 
+// terminal:active-changed の送信。アプリタブ内で今アクティブなターミナルの id。
+export interface TerminalActiveChangedMessage {
+  id: string
+}
+
 // renderer に公開する API の型。preload で実装し window.api として参照する。
 export interface WorkspaceApi {
   openFolder: () => Promise<OpenFolderResult | null>
@@ -367,6 +375,8 @@ export interface WorkspaceApi {
   notifyTerminalBell: (msg: TerminalBellMessage) => void
   // ベル通知のクリックで発生元ターミナルへ復帰する指示を購読する。返り値は購読解除関数。
   onActivateTerminal: (cb: (id: string) => void) => () => void
+  // 現在アクティブなターミナル（サブタブ）の id を main に報告する。通知抑制の判定に使う。
+  reportActiveTerminal: (id: string) => void
   // drag & drop された File の OS 上の絶対パスを得る（Electron 32+ で File.path が廃止されたため）。
   getPathForFile: (file: File) => string
 

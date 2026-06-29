@@ -5,6 +5,7 @@ import {
   IpcChannel,
   type TabsState,
   type TerminalActivateMessage,
+  type TerminalActiveChangedMessage,
   type TerminalBellMessage
 } from '../shared/ipc'
 import { getProjectRoot, setRootChangedListener } from './workspace'
@@ -158,6 +159,11 @@ function closeTab(id: number): void {
   // webContents を破棄する。destroyed で workspace/terminal/git 側の後始末が走る。
   tab.view.webContents.close()
   forgetTabMenuState(id)
+  // このアプリタブに紐づくベル関連の状態を掃除する（webContents.id は再利用されうるため）。
+  activeTerminalByWc.delete(id)
+  for (const key of [...lastBellAt.keys()]) {
+    if (key.startsWith(`${id}:`)) lastBellAt.delete(key)
+  }
 
   // 閉じた結果アクティブが変わったら、そのタブの値でメニューを同期する。
   if (activeId !== null) syncMenuChecks(activeId)
@@ -173,20 +179,25 @@ function closeTab(id: number): void {
 const BELL_THROTTLE_MS = 2000
 const lastBellAt = new Map<string, number>()
 
-// ターミナルでベルが鳴ったときの処理。送信元タブが「フォアグラウンドで表示中」なら
-// ユーザーは既に見ているので何もしない。非アクティブ（別タブ／ウィンドウ非フォーカス／
-// 別アプリ）のときだけ OS 通知を出し、クリックでそのアプリタブ＋発生元ターミナルへ復帰できるようにする。
-// なお「アクティブなアプリタブ」でも、別のターミナル（サブタブ）が鳴らした場合はユーザーが
-// それを見ているとは限らないため通知する（クリックでそのターミナルへ切り替わる）。
+// 各アプリタブ（webContents.id）で現在アクティブなターミナル（サブタブ）の id。
+// renderer が切替のたびに報告する。これにより「今まさに見ているターミナルが鳴ったとき」だけ
+// 通知を抑制でき、同じアプリタブ内でも非アクティブなターミナルのベルは通知できる。
+const activeTerminalByWc = new Map<number, string>()
+
+// ターミナルでベルが鳴ったときの処理。ユーザーが「今まさにそのターミナルを見ている」とき
+// （ウィンドウフォーカス済み かつ アクティブアプリタブ かつ そのターミナルがアクティブなサブタブ）
+// だけ通知を抑制する。それ以外（別アプリタブ／別ウィンドウ／別アプリ／同じアプリタブの非アクティブな
+// 別ターミナル）は、アプリ自体がアクティブでも OS 通知を出す。クリックで発生元アプリタブ＋
+// 発生元ターミナルへ復帰できるようにする。
 function handleTerminalBell(wcId: number, terminalId: string, num: number): void {
   if (!win || win.isDestroyed()) return
   const tab = tabs.find((t) => t.id === wcId)
   if (!tab) return
 
-  // ユーザーがこのタブを見ている最中（ウィンドウがフォーカス済み かつ アクティブタブ）は通知しない。
-  // 別ターミナルが鳴らしたケースも、どのターミナルがアクティブかは renderer 側の状態なので
-  // ここでは区別できない。アクティブアプリタブを見ているなら気づける前提で抑制する。
-  if (win.isFocused() && activeId === wcId) return
+  // 今まさに見ているターミナルが鳴ったときだけ抑制する。
+  const viewingThisTerminal =
+    win.isFocused() && activeId === wcId && activeTerminalByWc.get(wcId) === terminalId
+  if (viewingThisTerminal) return
 
   // 連打スロットル（ターミナル単位）。
   const key = `${wcId}:${terminalId}`
@@ -346,8 +357,12 @@ export function registerTabHandlers(): void {
   ipcMain.on(IpcChannel.TabNew, () => createTab())
   ipcMain.on(IpcChannel.TabActivate, (_e, id: number) => activateTab(id))
   ipcMain.on(IpcChannel.TabClose, (_e, id: number) => closeTab(id))
-  // 送信元タブ（e.sender.id）でベルが鳴った。非アクティブ時のみ OS 通知を出す。
+  // 送信元タブ（e.sender.id）でベルが鳴った。今まさに見ているターミナル以外は OS 通知を出す。
   ipcMain.on(IpcChannel.TerminalBell, (e, msg: TerminalBellMessage) =>
     handleTerminalBell(e.sender.id, msg.id, msg.num)
+  )
+  // 各アプリタブが、現在アクティブなターミナル（サブタブ）の id を報告する。
+  ipcMain.on(IpcChannel.TerminalActiveChanged, (e, msg: TerminalActiveChangedMessage) =>
+    activeTerminalByWc.set(e.sender.id, msg.id)
   )
 }
