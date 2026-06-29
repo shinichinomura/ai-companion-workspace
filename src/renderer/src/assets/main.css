@@ -196,9 +196,15 @@ body {
   color: var(--fg);
 }
 
-/* アクティブなタブは本体（ペイン背景）と地続きに見せる。 */
+/* アクティブなタブはファイルエクスプローラーの選択行（.tree-row.active）と同じ青で示す。 */
 .terminal-tab.active {
-  background: var(--bg-pane);
+  background: #094771;
+  color: var(--fg);
+}
+
+/* アクティブタブの上にホバーしても選択色を保つ（hover の暗いグレーで上書きしない）。 */
+.terminal-tab.active:hover {
+  background: #094771;
   color: var(--fg);
 }
 
