@@ -267,7 +267,9 @@ body {
    メニューを絶対配置で吊るすため relative にする。 */
 .terminal-actions {
   position: relative;
-  margin-left: auto;
+  /* 右寄せは左隣の .terminal-insert-file の margin-left:auto に一本化する。
+     ここにも auto を置くと空きを 2 つで山分けして @ が中央にずれるため 0 にする。 */
+  margin-left: 0;
   margin-right: 6px;
   display: inline-flex;
 }
@@ -302,12 +304,14 @@ body {
    margin-left:auto でこのボタン以降（定型プロンプト・再起動・トグル）をまとめて右に寄せる。 */
 .terminal-insert-file {
   margin-left: auto;
-  margin-right: 2px;
+  /* 稲妻ボタンと隣接させる（間隔を詰める）。 */
+  margin-right: 0;
 }
 
-/* @ グリフ。アイコンボタンの中で記号として見せる。 */
+/* @ グリフ。ボタン枠（22px）・稲妻アイコン（14px）と数値上は揃うが、
+   @ は字面が大きく見えるため、フォントサイズは少し小さめにして視覚的に釣り合わせる。 */
 .terminal-insert-file-glyph {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1;
 }
