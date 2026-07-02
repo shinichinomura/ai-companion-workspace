@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useWorkspaceStore } from '../store/workspace'
 import { useSettingsStore } from '../store/settings'
+import { useTerminalBridge } from '../store/terminalBridge'
 import type { WorkLayout } from '../../../shared/ipc'
 import TerminalInstance, { type TerminalHandle } from './TerminalInstance'
 
@@ -106,16 +107,37 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
     handle?.focus()
   }
 
-  // 現在開いているファイルの相対パスを、アクティブなターミナルの入力欄に `@relPath ` として挿入する。
+  // 指定パスを、アクティブなターミナルの入力欄に `@relPath ` として挿入する。
   // relPath は project root 基準＝claude の起動 cwd 基準なので、そのまま claude の @ 参照に使える。
+  // フォルダは claude の慣習に合わせ末尾に `/` を付ける（`@src/components/`）。
   // 改行は付けない。入力欄に乗るだけで、送信するかどうかはユーザーの Enter に委ねる（自動送信しない・設計原則）。
-  const insertActiveFile = (): void => {
-    if (!root || !activeFile) return
+  const insertMention = (relPath: string, isDirectory: boolean): void => {
+    if (!root) return
     if (collapsed) onToggle()
+    const suffix = isDirectory ? '/' : ''
     const handle = handlesRef.current.get(activeId)
-    handle?.sendText(`@${escapeAtMentionPath(activeFile.relPath)} `)
+    handle?.sendText(`@${escapeAtMentionPath(relPath)}${suffix} `)
     handle?.focus()
   }
+
+  // ヘッダーの「@」ボタン: 現在ビューワー/エディタで開いているファイルを挿入する。
+  const insertActiveFile = (): void => {
+    if (!activeFile) return
+    insertMention(activeFile.relPath, false)
+  }
+
+  // エクスプローラーの右クリックメニューなど、renderer の他コンポーネントからも
+  // 同じ挿入を呼べるよう、ブリッジへ登録する。activeId / collapsed 等の最新値を参照するため
+  // ref 経由の安定ラッパーを 1 度だけ登録し、アンマウント時に解除する。
+  const setInsertMention = useTerminalBridge((s) => s.setInsertMention)
+  const insertMentionRef = useRef(insertMention)
+  insertMentionRef.current = insertMention
+  useEffect(() => {
+    const fn = (relPath: string, isDirectory: boolean): void =>
+      insertMentionRef.current(relPath, isDirectory)
+    setInsertMention(fn)
+    return () => setInsertMention(null)
+  }, [setInsertMention])
 
   // 終了したアクティブターミナルを再起動する。
   const restartActive = (): void => {

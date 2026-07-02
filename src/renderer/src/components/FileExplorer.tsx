@@ -10,6 +10,7 @@ import {
 } from 'react'
 import type { FileNode, GitFileStatus } from '../../../shared/ipc'
 import { useWorkspaceStore } from '../store/workspace'
+import { useTerminalBridge } from '../store/terminalBridge'
 
 // 右クリックで開いたコンテキストメニューの状態。
 interface MenuState {
@@ -501,17 +502,25 @@ function FileExplorer(): JSX.Element {
     [openMenu, renamingPath, menu, commitRename, cancelRename]
   )
 
+  // アクティブなターミナルへ `@パス` 参照を挿入する関数（TerminalPane が登録）。
+  const insertMention = useTerminalBridge((s) => s.insertMention)
+
   // メニューの各項目。対象ノードに対する操作を組み立てる。
   const menuItems = useMemo<MenuItem[]>(() => {
     if (!menu) return []
-    const { relPath } = menu.node
+    const { relPath, isDirectory } = menu.node
     return [
+      // ターミナルの claude へ渡すため、入力欄に `@パス` を挿入する（改行は付けない＝送信はユーザー任せ）。
+      {
+        label: '@ でターミナルに渡す',
+        onSelect: () => insertMention?.(relPath, isDirectory)
+      },
       { label: '名称変更', onSelect: () => setRenamingPath(relPath) },
       { label: '削除', onSelect: () => void window.api.deletePath({ relPath }) },
       { label: 'Finder で表示', onSelect: () => void window.api.revealPath({ relPath }) },
       { label: 'パスをコピー', onSelect: () => void window.api.copyPath({ relPath }) }
     ]
-  }, [menu])
+  }, [menu, insertMention])
 
   // 変更を含むフォルダ集合は statuses が変わったときだけ作り直す。
   const changedDirs = useMemo(() => computeChangedDirs(gitStatuses), [gitStatuses])
