@@ -19,6 +19,14 @@ interface TermTab {
   num: number
 }
 
+// claude の `@パス` 参照向けに、パス内の空白をバックスラッシュでエスケープする。
+// claude の @ パーサーはトークンを空白で区切るため、空白入りパスは `@sp\ ace\ file.txt` の形にする必要がある。
+// これは claude 自身の @ 補完が挿入する正準形でもあり、実機（claude 2.1.x）でこの表記が
+// 機能することを確認済み。空白以外の記号はエスケープ不要（過剰エスケープするとパスが壊れる）。
+function escapeAtMentionPath(relPath: string): string {
+  return relPath.replace(/\s/g, '\\$&')
+}
+
 // 右ペイン: 統合ターミナル（spec 2.2.4）。
 // 1 つのアプリタブ内で複数のターミナルをタブで開ける。各ターミナルは TerminalInstance が
 // xterm.js（renderer）と node-pty（main）を IPC で結びつけて保持し、非アクティブなものも
@@ -105,7 +113,7 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
     if (!root || !activeFile) return
     if (collapsed) onToggle()
     const handle = handlesRef.current.get(activeId)
-    handle?.sendText(`@${activeFile.relPath} `)
+    handle?.sendText(`@${escapeAtMentionPath(activeFile.relPath)} `)
     handle?.focus()
   }
 
