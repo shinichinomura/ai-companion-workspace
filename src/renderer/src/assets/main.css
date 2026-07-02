@@ -298,6 +298,20 @@ body {
   cursor: default;
 }
 
+/* 「現在開いているファイルを @ で渡す」ボタン。ヘッダー右側の先頭に置き、
+   margin-left:auto でこのボタン以降（定型プロンプト・再起動・トグル）をまとめて右に寄せる。 */
+.terminal-insert-file {
+  margin-left: auto;
+  margin-right: 2px;
+}
+
+/* @ グリフ。アイコンボタンの中で記号として見せる。 */
+.terminal-insert-file-glyph {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 /* 展開されるメニュー本体。トリガーの直下・右寄せに吊るす。 */
 .terminal-action-menu {
   position: absolute;

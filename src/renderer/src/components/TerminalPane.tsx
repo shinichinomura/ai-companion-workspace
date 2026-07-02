@@ -27,6 +27,8 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
   // project root。未選択ならターミナルは起動しない。root 変更時は App 側で本コンポーネントごと
   // 再マウントされる（rootKey による key 付け）ため、初期状態（ターミナル 1 つ）から作り直る。
   const root = useWorkspaceStore((s) => s.root)
+  // 現在ビューワー/エディタで開いているファイル。null なら「@ で渡す」ボタンは無効。
+  const activeFile = useWorkspaceStore((s) => s.activeFile)
   // よく使う Git 操作のボタン定義（設定画面で編集可能）。押すとアクティブな統合ターミナルへ prompt を送る。
   // 送信先はユーザーが見ている統合ターミナル。Claude が対話モードで起動している前提の
   // ショートカットで、裏でプロンプトを投入するものではない（spec 設計原則）。
@@ -93,6 +95,17 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
     if (collapsed) onToggle()
     const handle = handlesRef.current.get(activeId)
     handle?.sendText(prompt + '\r')
+    handle?.focus()
+  }
+
+  // 現在開いているファイルの相対パスを、アクティブなターミナルの入力欄に `@relPath ` として挿入する。
+  // relPath は project root 基準＝claude の起動 cwd 基準なので、そのまま claude の @ 参照に使える。
+  // 改行は付けない。入力欄に乗るだけで、送信するかどうかはユーザーの Enter に委ねる（自動送信しない・設計原則）。
+  const insertActiveFile = (): void => {
+    if (!root || !activeFile) return
+    if (collapsed) onToggle()
+    const handle = handlesRef.current.get(activeId)
+    handle?.sendText(`@${activeFile.relPath} `)
     handle?.focus()
   }
 
@@ -181,6 +194,27 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
             +
           </button>
         </div>
+
+        {/* 現在開いているファイルを、アクティブなターミナルの入力欄に `@パス` として挿入する。
+            改行は付けないため、そのまま claude に渡すかどうかはユーザーが Enter で決める。
+            ファイル未オープン時は無効。ヘッダー右側（定型プロンプトの左隣）に置く。 */}
+        <button
+          type="button"
+          className="terminal-action-trigger terminal-insert-file"
+          onClick={insertActiveFile}
+          disabled={!root || !activeFile}
+          title={
+            activeFile
+              ? `@${activeFile.name} をターミナルに挿入（Enter は自分で押す）`
+              : 'ファイルを開くと現在のファイルを @ で渡せます'
+          }
+          aria-label="現在開いているファイルを @ でターミナルに挿入"
+        >
+          {/* 「@」は claude の `@path` 参照記法そのもの。機能を最も端的に表す。 */}
+          <span aria-hidden="true" className="terminal-insert-file-glyph">
+            @
+          </span>
+        </button>
 
         {/* よく使う Git 操作を Claude に送る定型プロンプト。ヘッダーにはアイコンだけを置き、
             押すと登録済みの選択肢をメニューとして展開する（設定画面で編集可能）。
