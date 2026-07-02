@@ -16,7 +16,7 @@ function MarkdownPreview({ content }: { content: string }): JSX.Element {
   // プレビュー内リンクのクリックを横取りする。
   // - `#anchor`        : 同一ドキュメント内スクロール
   // - 相対ファイルパス : 本アプリ内で該当ファイルを開く（project root 内に限定）
-  // - 外部 URL 等       : 既定動作のまま（本機能の対象外）
+  // - 外部 URL 等       : 既定動作に委ねる（main の will-navigate ガードが OS の既定ブラウザで開く）
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const anchor = (e.target as HTMLElement).closest('a')
@@ -55,6 +55,7 @@ function MarkdownPreview({ content }: { content: string }): JSX.Element {
         void openFileByRelPath(relPath)
       }
       // 3. それ以外（外部 URL など）は既定動作に委ねる。
+      //    リンク遷移は main 側の will-navigate ガードが捕捉し OS の既定ブラウザで開く。
     },
     [activeRelPath, openFileByRelPath]
   )

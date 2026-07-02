@@ -122,9 +122,22 @@ function createTab(opts: { restore?: boolean; root?: string } = {}): Tab {
   })
 
   // 外部リンクは OS の既定ブラウザで開く（アプリ内ナビゲーションを防ぐ）。
+  // window.open / target=_blank 経由の遷移を捕捉する。
   view.webContents.setWindowOpenHandler((details) => {
     void shell.openExternal(details.url)
     return { action: 'deny' }
+  })
+
+  // プレーンなリンククリック等による http(s) への遷移も既定ブラウザで開く。
+  // Markdown プレビュー内の外部リンクをクリックすると WebContentsView 自体が
+  // その URL へ遷移してアプリ本体が置き換わってしまうため、ここで遷移を止めて
+  // OS の既定ブラウザに委ねる。レンダラー本体の読み込みは loadURL 経由で
+  // will-navigate を発火しないため影響しない。
+  view.webContents.on('will-navigate', (event, url) => {
+    if (/^https?:\/\//i.test(url)) {
+      event.preventDefault()
+      void shell.openExternal(url)
+    }
   })
 
   const tab: Tab = { id: view.webContents.id, view, title: '新規タブ' }
