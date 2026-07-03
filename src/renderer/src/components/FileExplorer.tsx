@@ -455,6 +455,59 @@ function RecentFolders(): JSX.Element {
   )
 }
 
+// 「最近開いたファイル」セクションの折りたたみ状態を保存する localStorage キー。
+// 開閉は UI の好みなので、プロジェクト（root）ごとには分けず全体で 1 つ持つ。
+const RECENT_FILES_COLLAPSED_KEY = 'recent-files-collapsed'
+
+// ツリー上部に表示する「最近開いたファイル」の折りたたみセクション。
+// 現在の root 内で最近エディタに開いたファイルを新しい順に並べる。空のときは何も表示しない。
+function RecentFiles(): JSX.Element | null {
+  const recentFiles = useWorkspaceStore((s) => s.recentFiles)
+  const activeFile = useWorkspaceStore((s) => s.activeFile)
+  const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem(RECENT_FILES_COLLAPSED_KEY) === 'true'
+  )
+
+  // 記録が無いときはセクションごと隠し、ツリーの場所を取らない。
+  if (recentFiles.length === 0) return null
+
+  const toggle = (): void => {
+    setCollapsed((c) => {
+      const next = !c
+      localStorage.setItem(RECENT_FILES_COLLAPSED_KEY, next ? 'true' : 'false')
+      return next
+    })
+  }
+
+  return (
+    <div className="recent-files">
+      <div className="recent-files-header" onClick={toggle}>
+        <span className="tree-twisty">{collapsed ? '▸' : '▾'}</span>
+        <span className="recent-files-title">最近開いたファイル</span>
+      </div>
+      {!collapsed &&
+        recentFiles.map((relPath) => {
+          const name = baseName(relPath)
+          const dir = parentDir(relPath)
+          const isActive = activeFile?.relPath === relPath
+          return (
+            <div
+              key={relPath}
+              className={`recent-file-row${isActive ? ' active' : ''}`}
+              title={relPath}
+              onClick={() => void openFileByRelPath(relPath)}
+            >
+              <span className="tree-icon">📄</span>
+              <span className="recent-file-name">{name}</span>
+              {dir && <span className="recent-file-dir">{dir}</span>}
+            </div>
+          )
+        })}
+    </div>
+  )
+}
+
 // 左ペイン: ファイルエクスプローラー。
 function FileExplorer(): JSX.Element {
   const rootName = useWorkspaceStore((s) => s.rootName)
@@ -582,15 +635,18 @@ function FileExplorer(): JSX.Element {
               <div className="placeholder">変更されたファイルはありません</div>
             )
           ) : (
-            rootNodes.map((node) => (
-              <TreeNode
-                key={node.relPath}
-                node={node}
-                depth={0}
-                statuses={gitStatuses}
-                changedDirs={changedDirs}
-              />
-            ))
+            <>
+              <RecentFiles />
+              {rootNodes.map((node) => (
+                <TreeNode
+                  key={node.relPath}
+                  node={node}
+                  depth={0}
+                  statuses={gitStatuses}
+                  changedDirs={changedDirs}
+                />
+              ))}
+            </>
           )}
         </div>
       </div>

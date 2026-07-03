@@ -544,6 +544,77 @@ body {
   text-align: left;
 }
 
+/* 最近開いたファイル（ツリー上部の折りたたみセクション） */
+.recent-files {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+/* セクション見出し。クリックで開閉する。 */
+.recent-files-header {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding-right: 8px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.recent-files-header:hover {
+  background: var(--bg-elev);
+}
+
+.recent-files-title {
+  font-size: 11px;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* 最近開いたファイルの 1 行。ツイスティ分だけ字下げしてツリーと頭を揃える。 */
+.recent-file-row {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding-left: 26px;
+  padding-right: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.recent-file-row:hover {
+  background: var(--bg-elev);
+}
+
+.recent-file-row.active {
+  background: #094771;
+}
+
+/* ファイル名。長い名前は省略するが、ディレクトリ表示にも幅を譲る。 */
+.recent-file-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 所属ディレクトリ。淡色で、末尾を優先して省略表示する（rtl で先頭側を削る）。 */
+.recent-file-dir {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
 /* ファイルツリー */
 .tree {
   padding: 4px 0;

@@ -22,9 +22,17 @@ import {
   type DeletePathRequest,
   type DeletePathResult,
   type RevealPathRequest,
-  type CopyPathRequest
+  type CopyPathRequest,
+  type AddRecentFileRequest,
+  type RemoveRecentFileRequest
 } from '../shared/ipc'
 import { addRecentFolder, loadRecentFolders, removeRecentFolder } from './settings'
+import {
+  addRecentFile,
+  getRecentFiles,
+  removeRecentFile,
+  setRecentFiles
+} from './recent-files'
 import { startGitWatching, stopGitWatching } from './git'
 
 // 初期 ignore 対象のディレクトリ名（spec 4.2 / 5.6）。
@@ -233,6 +241,47 @@ async function handleOpenFolderByPath(
 // 最近開いたフォルダの絶対パス一覧を返す（新しい順）。
 async function handleGetRecentFolders(): Promise<string[]> {
   return loadRecentFolders()
+}
+
+// 最近開いたファイル（現在の project root 内）の一覧を返す。
+// ディスク上に無くなったファイルはこの時点で除外し、永続データも掃除する（自動管理）。
+async function handleGetRecentFiles(e: Electron.IpcMainInvokeEvent): Promise<string[]> {
+  const root = getProjectRoot(e.sender.id)
+  if (!root) return []
+  const list = await getRecentFiles(root)
+  const surviving: string[] = []
+  for (const relPath of list) {
+    try {
+      await fs.stat(join(root, relPath))
+      surviving.push(relPath)
+    } catch {
+      // 削除・リネーム済みのファイルは一覧から落とす。
+    }
+  }
+  if (surviving.length !== list.length) {
+    return setRecentFiles(root, surviving)
+  }
+  return list
+}
+
+// 最近開いたファイルに relPath を記録し、更新後の一覧を返す。root 未選択なら記録しない。
+async function handleAddRecentFile(
+  e: Electron.IpcMainInvokeEvent,
+  req: AddRecentFileRequest
+): Promise<string[]> {
+  const root = getProjectRoot(e.sender.id)
+  if (!root) return []
+  return addRecentFile(root, req.relPath)
+}
+
+// 最近開いたファイルから relPath を除外し、更新後の一覧を返す。
+async function handleRemoveRecentFile(
+  e: Electron.IpcMainInvokeEvent,
+  req: RemoveRecentFileRequest
+): Promise<string[]> {
+  const root = getProjectRoot(e.sender.id)
+  if (!root) return []
+  return removeRecentFile(root, req.relPath)
 }
 
 // 指定ディレクトリの直下のエントリを返す（遅延展開のため 1 階層のみ）。
@@ -467,6 +516,9 @@ export function registerWorkspaceHandlers(): void {
   ipcMain.handle(IpcChannel.OpenFolder, handleOpenFolder)
   ipcMain.handle(IpcChannel.OpenFolderByPath, handleOpenFolderByPath)
   ipcMain.handle(IpcChannel.GetRecentFolders, handleGetRecentFolders)
+  ipcMain.handle(IpcChannel.GetRecentFiles, handleGetRecentFiles)
+  ipcMain.handle(IpcChannel.AddRecentFile, handleAddRecentFile)
+  ipcMain.handle(IpcChannel.RemoveRecentFile, handleRemoveRecentFile)
   ipcMain.handle(IpcChannel.ReadDir, handleReadDir)
   ipcMain.handle(IpcChannel.ReadFile, handleReadFile)
   ipcMain.handle(IpcChannel.WriteFile, handleWriteFile)

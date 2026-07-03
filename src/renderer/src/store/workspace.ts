@@ -97,7 +97,17 @@ async function openFileInternal(
       isBinary: result.isBinary
     }
   })
-  if (recordHistory) pushHistory(relPath, get, set)
+  if (recordHistory) {
+    pushHistory(relPath, get, set)
+    // 最近開いたファイルに記録する（現在の root 内のファイルのみ。更新後の一覧で置き換える）。
+    // 履歴移動（戻る/進む）や、バイナリを OS アプリで開いただけのケースはここに来ないため記録されない。
+    void window.api
+      .addRecentFile({ relPath })
+      .then((list) => set({ recentFiles: list }))
+      .catch(() => {
+        // 記録の失敗は表示に影響しないため無視する。
+      })
+  }
 }
 
 // openFolder / openFolderByPath の結果をストアに反映する共通処理。
@@ -117,6 +127,8 @@ async function applyOpenResult(
     // 別フォルダに切り替えたらファイル履歴（戻る/進む）はリセットする。
     history: [],
     historyIndex: -1,
+    // 最近開いたファイルは root ごとに管理する。切り替え直後は空にし、直後の loadRecentFiles で埋める。
+    recentFiles: [],
     // 前のフォルダの Git status を持ち越さない。直後に refreshGitStatus で埋め直す。
     gitStatuses: {},
     // 開いたプロジェクト固有の隠しファイル表示設定に切り替える。
@@ -147,6 +159,9 @@ interface WorkspaceState {
   // 最近開いたフォルダの絶対パス一覧（新しい順）。
   recentFolders: string[]
 
+  // 最近開いたファイルの relPath 一覧（新しい順、現在の root 内のみ）。
+  recentFiles: string[]
+
   // 隠しファイル（. で始まる名前）をツリーに表示するか。
   showHidden: boolean
 
@@ -160,6 +175,8 @@ interface WorkspaceState {
   openFolder: () => Promise<void>
   // 最近開いた一覧を main から取得して反映する。
   loadRecentFolders: () => Promise<void>
+  // 最近開いたファイル一覧を main から取得して反映する（現在の root 内、存在しないものは除外済み）。
+  loadRecentFiles: () => Promise<void>
   // 前回フォルダ（最新の最近開いた一覧）を自動で開き直す。起動時に呼ぶ。
   restoreLastFolder: () => Promise<void>
   // 指定パスのフォルダを開く（最近開いた一覧からの選択）。
@@ -202,6 +219,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   history: [],
   historyIndex: -1,
   recentFolders: [],
+  recentFiles: [],
   // 起動直後は root 未確定のため既定値で初期化し、フォルダを開いた時点で root 別の値に切り替える。
   showHidden: loadShowHidden(null),
   showOnlyChanged: loadShowOnlyChanged(null),
@@ -213,12 +231,19 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await applyOpenResult(result, set)
     await get().refreshGitStatus()
     await get().loadRecentFolders()
+    await get().loadRecentFiles()
   },
 
   // 最近開いた一覧を main から取得して反映する。
   loadRecentFolders: async () => {
     const recent = await window.api.getRecentFolders()
     set({ recentFolders: recent })
+  },
+
+  // 最近開いたファイル一覧を main から取得して反映する（存在しないものは main 側で除外済み）。
+  loadRecentFiles: async () => {
+    const recent = await window.api.getRecentFiles()
+    set({ recentFiles: recent })
   },
 
   // 前回フォルダを自動で開き直す。存在しなければ何もしない（一覧は main 側で掃除される）。
@@ -232,6 +257,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await get().refreshGitStatus()
     // 開けずに一覧から除外された場合に備えて再取得する。
     await get().loadRecentFolders()
+    await get().loadRecentFiles()
   },
 
   // 指定パスのフォルダを開く（最近開いた一覧からの選択）。
@@ -240,6 +266,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await applyOpenResult(result, set)
     await get().refreshGitStatus()
     await get().loadRecentFolders()
+    await get().loadRecentFiles()
   },
 
   // ディレクトリの展開 / 折りたたみ。未読込なら子を取得する。
@@ -278,6 +305,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       await openFileInternal(relPath, name, get, set)
     } catch {
       // 読めない（存在しない・ディレクトリ・root 外を main が拒否）場合は何もしない。
+      // 「最近開いたファイル」から消えたファイルをクリックしたケースに備え、一覧から掃除する。
+      try {
+        const list = await window.api.removeRecentFile({ relPath })
+        set({ recentFiles: list })
+      } catch {
+        // 掃除の失敗は表示に影響しないため無視する。
+      }
     }
   },
 

@@ -2,9 +2,11 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import {
   IpcChannel,
+  type AddRecentFileRequest,
   type AppSettings,
   type FsEventBatch,
   type OpenFolderByPathRequest,
+  type RemoveRecentFileRequest,
   type OpenPathRequest,
   type RenamePathRequest,
   type DeletePathRequest,
@@ -33,6 +35,10 @@ const api: WorkspaceApi = {
   openFolderByPath: (req: OpenFolderByPathRequest) =>
     ipcRenderer.invoke(IpcChannel.OpenFolderByPath, req),
   getRecentFolders: () => ipcRenderer.invoke(IpcChannel.GetRecentFolders),
+  getRecentFiles: () => ipcRenderer.invoke(IpcChannel.GetRecentFiles),
+  addRecentFile: (req: AddRecentFileRequest) => ipcRenderer.invoke(IpcChannel.AddRecentFile, req),
+  removeRecentFile: (req: RemoveRecentFileRequest) =>
+    ipcRenderer.invoke(IpcChannel.RemoveRecentFile, req),
   readDir: (req: ReadDirRequest) => ipcRenderer.invoke(IpcChannel.ReadDir, req),
   readFile: (req: ReadFileRequest) => ipcRenderer.invoke(IpcChannel.ReadFile, req),
   writeFile: (req: WriteFileRequest) => ipcRenderer.invoke(IpcChannel.WriteFile, req),

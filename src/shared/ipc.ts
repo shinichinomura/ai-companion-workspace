@@ -7,6 +7,10 @@ export const IpcChannel = {
   OpenFolderByPath: 'workspace:open-folder-by-path',
   // 最近開いたフォルダの絶対パス一覧を取得する。
   GetRecentFolders: 'workspace:get-recent-folders',
+  // 最近開いたファイル（現在の project root 内）。relPath 一覧の取得・追加・削除。
+  GetRecentFiles: 'workspace:get-recent-files',
+  AddRecentFile: 'workspace:add-recent-file',
+  RemoveRecentFile: 'workspace:remove-recent-file',
   ReadDir: 'workspace:read-dir',
   ReadFile: 'workspace:read-file',
   WriteFile: 'workspace:write-file',
@@ -184,6 +188,16 @@ export interface OpenFolderByPathRequest {
   path: string // 開くフォルダの絶対パス
 }
 
+// 最近開いたファイルの追加リクエスト。relPath は現在の project root 相対。
+export interface AddRecentFileRequest {
+  relPath: string
+}
+
+// 最近開いたファイルの削除リクエスト。relPath は現在の project root 相対。
+export interface RemoveRecentFileRequest {
+  relPath: string
+}
+
 // readDir / readFile のリクエスト。relPath は project root からの相対パス。
 export interface ReadDirRequest {
   relPath: string
@@ -326,6 +340,13 @@ export interface WorkspaceApi {
   openFolderByPath: (req: OpenFolderByPathRequest) => Promise<OpenFolderResult | null>
   // 最近開いたフォルダの絶対パス一覧（新しい順）。
   getRecentFolders: () => Promise<string[]>
+  // 最近開いたファイル（現在の project root 内、新しい順の relPath 一覧）を取得する。
+  // main 側でディスク上に無くなったファイルは除外して返す。
+  getRecentFiles: () => Promise<string[]>
+  // 最近開いたファイルに relPath を記録し、更新後の一覧を返す。
+  addRecentFile: (req: AddRecentFileRequest) => Promise<string[]>
+  // 最近開いたファイルから relPath を除外し、更新後の一覧を返す。
+  removeRecentFile: (req: RemoveRecentFileRequest) => Promise<string[]>
   readDir: (req: ReadDirRequest) => Promise<FileNode[]>
   readFile: (req: ReadFileRequest) => Promise<ReadFileResult>
   writeFile: (req: WriteFileRequest) => Promise<WriteFileResult>
