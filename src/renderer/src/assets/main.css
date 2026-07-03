@@ -556,6 +556,8 @@ body {
   display: flex;
   align-items: center;
   height: 22px;
+  /* 三角マークの左位置をツリー最上位フォルダのツイスティ（padding-left: 8px）と合わせる。 */
+  padding-left: 8px;
   padding-right: 8px;
   cursor: pointer;
   user-select: none;
