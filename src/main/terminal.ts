@@ -108,13 +108,19 @@ function handleStart(
   })
 
   term.onExit(({ exitCode }) => {
+    // この PTY が今もこのキーの現役かを確認する。dispose / 再起動 / 同一 id での張り替え
+    // （開発時の StrictMode 二重マウント含む）で既に別の PTY に差し替わっている場合、
+    // この onExit は「破棄済みの古い PTY」のものなので、renderer には終了を通知しない。
+    // 通知してしまうと、貼り替わった新しい TerminalInstance が「自分のシェルが終了した」と
+    // 誤認し、生きているのに「[プロセスが終了しました]」と表示してしまう。
+    if (stateByKey.get(key)?.term !== term) {
+      return
+    }
+    // 現役だった PTY が本当に終了した場合のみ、状態を掃除して renderer に通知する。
+    stateByKey.delete(key)
     const payload: TerminalExit = { id: req.id, exitCode }
     if (!sender.isDestroyed()) {
       sender.send(IpcChannel.TerminalExit, payload)
-    }
-    // このターミナル用の状態だけを掃除する（別ターミナルの PTY には触れない）。
-    if (stateByKey.get(key)?.term === term) {
-      stateByKey.delete(key)
     }
   })
 
