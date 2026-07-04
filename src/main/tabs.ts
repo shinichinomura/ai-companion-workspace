@@ -6,7 +6,8 @@ import {
   type TabsState,
   type TerminalActivateMessage,
   type TerminalActiveChangedMessage,
-  type TerminalBellMessage
+  type TerminalBellMessage,
+  type TerminalUnreadMessage
 } from '../shared/ipc'
 import { getProjectRoot, setRootChangedListener } from './workspace'
 import { syncMenuChecks, forgetTabMenuState, refreshRecentMenu } from './menu'
@@ -68,10 +69,15 @@ function loadRenderer(
 }
 
 // 現在のタブ状態をクロームシェルに push する。
+// attention は「そのタブ内に未確認（ベルが鳴ったが未表示）のターミナルがあるか」の集約。
 function notifyShell(): void {
   if (!win || win.isDestroyed()) return
   const state: TabsState = {
-    tabs: tabs.map((t) => ({ id: t.id, title: t.title })),
+    tabs: tabs.map((t) => ({
+      id: t.id,
+      title: t.title,
+      attention: (unreadTerminals.get(t.id)?.size ?? 0) > 0
+    })),
     activeId
   }
   win.webContents.send(IpcChannel.TabsState, state)
@@ -103,6 +109,8 @@ function activateTab(id: number): void {
   }
   // メニューのチェック状態をこのタブの値に合わせる。
   syncMenuChecks(id)
+  // 切り替えた先で見えているターミナルが未確認だったら印を消す。
+  clearUnreadIfViewing(id)
   notifyShell()
   persistSession()
 }
@@ -174,6 +182,7 @@ function closeTab(id: number): void {
   forgetTabMenuState(id)
   // このアプリタブに紐づくベル関連の状態を掃除する（webContents.id は再利用されうるため）。
   activeTerminalByWc.delete(id)
+  unreadTerminals.delete(id)
   for (const key of [...lastBellAt.keys()]) {
     if (key.startsWith(`${id}:`)) lastBellAt.delete(key)
   }
@@ -197,6 +206,48 @@ const lastBellAt = new Map<string, number>()
 // 通知を抑制でき、同じアプリタブ内でも非アクティブなターミナルのベルは通知できる。
 const activeTerminalByWc = new Map<number, string>()
 
+// 各アプリタブ（webContents.id）ごとの「未確認（ベルが鳴ったがまだ見ていない）ターミナル id」の集合。
+// OS 通知を閉じても、そのターミナルを実際に見るまで印を残し続けるための状態。
+// 見た（フォーカス済み＋アクティブアプリタブ＋アクティブサブタブ）時点で該当 id を取り除く。
+const unreadTerminals = new Map<number, Set<string>>()
+
+// 指定アプリタブの未確認ターミナル id 一覧を、そのタブの renderer に push する（サブタブの印用）。
+function pushUnreadToTab(wcId: number): void {
+  const tab = tabs.find((t) => t.id === wcId)
+  if (!tab || tab.view.webContents.isDestroyed()) return
+  const payload: TerminalUnreadMessage = { ids: [...(unreadTerminals.get(wcId) ?? [])] }
+  tab.view.webContents.send(IpcChannel.TerminalUnread, payload)
+}
+
+// あるターミナルを未確認として印を立てる。スロットルや通知可否とは無関係に、
+// 「見ていないターミナルが鳴った」時点で必ず立てる。既に立っていれば再送しない。
+function markTerminalUnread(wcId: number, terminalId: string): void {
+  let set = unreadTerminals.get(wcId)
+  if (!set) {
+    set = new Set()
+    unreadTerminals.set(wcId, set)
+  }
+  if (set.has(terminalId)) return
+  set.add(terminalId)
+  pushUnreadToTab(wcId)
+  notifyShell()
+}
+
+// 指定アプリタブを「今まさに見ている」なら、その時アクティブなターミナルの未確認印を消す。
+// 見ている条件＝ウィンドウフォーカス済み かつ そのアプリタブがアクティブ。
+// アプリタブ切替・サブタブ切替・ウィンドウ復帰の各契機から呼ぶ。
+function clearUnreadIfViewing(wcId: number): void {
+  if (!win || win.isDestroyed()) return
+  if (!win.isFocused() || activeId !== wcId) return
+  const termId = activeTerminalByWc.get(wcId)
+  if (termId === undefined) return
+  const set = unreadTerminals.get(wcId)
+  if (!set || !set.delete(termId)) return
+  if (set.size === 0) unreadTerminals.delete(wcId)
+  pushUnreadToTab(wcId)
+  notifyShell()
+}
+
 // ターミナルでベルが鳴ったときの処理。ユーザーが「今まさにそのターミナルを見ている」とき
 // （ウィンドウフォーカス済み かつ アクティブアプリタブ かつ そのターミナルがアクティブなサブタブ）
 // だけ通知を抑制する。それ以外（別アプリタブ／別ウィンドウ／別アプリ／同じアプリタブの非アクティブな
@@ -212,7 +263,11 @@ function handleTerminalBell(wcId: number, terminalId: string, num: number): void
     win.isFocused() && activeId === wcId && activeTerminalByWc.get(wcId) === terminalId
   if (viewingThisTerminal) return
 
-  // 連打スロットル（ターミナル単位）。
+  // 未確認の印を立てる。OS 通知を閉じても、そのターミナルを見るまでタブ／サブタブに残す。
+  // スロットルや通知可否より前に行い、通知が出なくても印は必ず立てる。
+  markTerminalUnread(wcId, terminalId)
+
+  // 連打スロットル（ターミナル単位）。ここから先は OS 通知の間引きにのみ効く。
   const key = `${wcId}:${terminalId}`
   const now = Date.now()
   const prev = lastBellAt.get(key) ?? 0
@@ -322,6 +377,11 @@ export function createMainWindow(): void {
   win.on('ready-to-show', () => win?.show())
   // ウィンドウのリサイズに追従してアクティブビューを配置し直す。
   win.on('resize', layout)
+  // ウィンドウが前面に戻ったら、今見えているターミナルが未確認だった場合は印を消す。
+  // （アプリタブ・サブタブは変わらないままフォーカスだけ戻る経路をここで拾う。）
+  win.on('focus', () => {
+    if (activeId !== null) clearUnreadIfViewing(activeId)
+  })
 
   // ウィンドウ本体（webContents）にクロームシェル（タブバー）を読み込む。
   loadRenderer(win, 'shell')
@@ -331,6 +391,10 @@ export function createMainWindow(): void {
     const tab = tabs.find((t) => t.id === wcId)
     if (!tab) return
     tab.title = root ? basename(root) : '新規タブ'
+    // フォルダを切り替えるとそのタブのターミナルは作り直され（id を採番し直す）、
+    // 旧ターミナルの未確認状態は無意味になる。放置すると新ターミナルが同じ id を
+    // 再利用して誤って印が付くため、このタブの未確認状態はリセットする。
+    if (unreadTerminals.delete(wcId)) pushUnreadToTab(wcId)
     notifyShell()
     persistSession()
     // フォルダを開くと最近フォルダ一覧が変化するため、メニューを再構築する。
@@ -375,7 +439,9 @@ export function registerTabHandlers(): void {
     handleTerminalBell(e.sender.id, msg.id, msg.num)
   )
   // 各アプリタブが、現在アクティブなターミナル（サブタブ）の id を報告する。
-  ipcMain.on(IpcChannel.TerminalActiveChanged, (e, msg: TerminalActiveChangedMessage) =>
+  // 報告後、そのターミナルを今まさに見ているなら未確認の印を消す。
+  ipcMain.on(IpcChannel.TerminalActiveChanged, (e, msg: TerminalActiveChangedMessage) => {
     activeTerminalByWc.set(e.sender.id, msg.id)
-  )
+    clearUnreadIfViewing(e.sender.id)
+  })
 }

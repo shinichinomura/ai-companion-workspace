@@ -10,6 +10,8 @@
   --fg: #d4d4d4;
   --fg-dim: #888;
   --accent: #0a84ff;
+  /* 操作待ち（ベルが鳴ったが未確認）の印に使う琥珀色。選択色（青）と紛れないよう暖色にする。 */
+  --attention: #e0a54a;
 }
 
 * {
@@ -210,6 +212,16 @@ body {
 
 .terminal-tab-label {
   white-space: nowrap;
+}
+
+/* 操作待ち（ベルが鳴ったが未確認）マーク。番号の左に琥珀色の丸を置く。
+   通知を閉じても、このサブタブを開くまで残す。 */
+.terminal-tab-attention {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--attention);
 }
 
 /* タブ内の閉じるボタン。 */

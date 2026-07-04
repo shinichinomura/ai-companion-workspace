@@ -79,7 +79,10 @@ export const IpcChannel = {
   TerminalActivate: 'terminal:activate',
   // R→M send: そのアプリタブで現在アクティブなターミナル（サブタブ）の id を報告する。
   // main は「今まさに見ているターミナルが鳴ったときだけ」通知を抑制するために使う。
-  TerminalActiveChanged: 'terminal:active-changed'
+  TerminalActiveChanged: 'terminal:active-changed',
+  // M→R push: このアプリタブ内で「ベルが鳴ったがまだ見ていない（未確認）」ターミナルの id 一覧。
+  // 通知を閉じても、そのターミナルを開くまではサブタブに印を出し続けるために使う。
+  TerminalUnread: 'terminal:unread'
 } as const
 
 // Markdown プレビューで画像を表示するためのカスタムスキーム。
@@ -106,6 +109,9 @@ export interface TabInfo {
   title: string
   // 未保存の変更があるか（Phase 5 で利用。当面は常に false）。
   dirty?: boolean
+  // このタブ内に「ベルが鳴ったがまだ見ていない（未確認）」ターミナルがあるか。
+  // 通知を閉じても、該当ターミナルを開くまでタブに印を出し続けるために使う。
+  attention?: boolean
 }
 
 // クロームシェルに push するタブバーの状態。
@@ -384,6 +390,11 @@ export interface TerminalActiveChangedMessage {
   id: string
 }
 
+// terminal:unread の push。このアプリタブ内で未確認（ベルが鳴ったが未表示）のターミナル id 一覧。
+export interface TerminalUnreadMessage {
+  ids: string[]
+}
+
 // renderer に公開する API の型。preload で実装し window.api として参照する。
 export interface WorkspaceApi {
   openFolder: () => Promise<OpenFolderResult | null>
@@ -456,6 +467,9 @@ export interface WorkspaceApi {
   onActivateTerminal: (cb: (id: string) => void) => () => void
   // 現在アクティブなターミナル（サブタブ）の id を main に報告する。通知抑制の判定に使う。
   reportActiveTerminal: (id: string) => void
+  // このアプリタブ内で未確認（ベルが鳴ったが未表示）のターミナル id 一覧を購読する。
+  // 該当サブタブに印を出すために使う。返り値は購読解除関数。
+  onTerminalUnread: (cb: (ids: string[]) => void) => () => void
   // drag & drop された File の OS 上の絶対パスを得る（Electron 32+ で File.path が廃止されたため）。
   getPathForFile: (file: File) => string
 

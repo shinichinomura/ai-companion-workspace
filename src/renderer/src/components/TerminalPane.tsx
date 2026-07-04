@@ -57,6 +57,9 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
   tabsRef.current = tabs
   // 各ターミナルの終了状態。アクティブなターミナルが終了していたら再起動ボタンを出す。
   const [exited, setExited] = useState<Record<string, boolean>>({})
+  // 未確認（ベルが鳴ったがまだ見ていない）ターミナルの id 集合。真値は main が持ち、push で受け取る。
+  // 通知を閉じても、そのサブタブを開く（見る）まで印が残る。開いた時点で main が集合から外す。
+  const [unreadIds, setUnreadIds] = useState<Set<string>>(() => new Set())
 
   // 各 TerminalInstance が登録する操作ハンドル（フォーカス・送信・再起動）。
   const handlesRef = useRef<Map<string, TerminalHandle>>(new Map())
@@ -159,6 +162,13 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
     return unsubscribe
   }, [])
 
+  // このアプリタブ内の未確認ターミナル id 一覧を main から受け取る。
+  // どのサブタブに印を出すかは main が一元管理し、ここは表示するだけ。
+  useEffect(() => {
+    const unsubscribe = window.api.onTerminalUnread((ids) => setUnreadIds(new Set(ids)))
+    return unsubscribe
+  }, [])
+
   // 定型プロンプトのメニューを開いている間は、外側クリックと Escape で閉じる。
   useEffect(() => {
     if (!promptMenuOpen) return
@@ -191,6 +201,15 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
               onClick={() => setActiveId(t.id)}
               title={`ターミナル ${t.num}`}
             >
+              {/* 未確認（ベルが鳴ったが未表示）のターミナルに琥珀色の印を出す。
+                  通知を閉じても、このサブタブを開くまで残る。 */}
+              {unreadIds.has(t.id) && (
+                <span
+                  className="terminal-tab-attention"
+                  aria-hidden="true"
+                  title="操作待ちです"
+                />
+              )}
               <span className="terminal-tab-label">
                 {/* 終了済みのターミナルは印を付けて分かるようにする。 */}
                 {exited[t.id] ? '○ ' : ''}

@@ -25,6 +25,7 @@ import {
   type TerminalExit,
   type TerminalInputMessage,
   type TerminalResizeRequest,
+  type TerminalUnreadMessage,
   type TerminalStartRequest,
   type WriteFileRequest,
   type WorkLayout,
@@ -115,6 +116,11 @@ const api: WorkspaceApi = {
   reportActiveTerminal: (id: string) => {
     const msg: TerminalActiveChangedMessage = { id }
     ipcRenderer.send(IpcChannel.TerminalActiveChanged, msg)
+  },
+  onTerminalUnread: (cb: (ids: string[]) => void) => {
+    const listener = (_e: unknown, msg: TerminalUnreadMessage): void => cb(msg.ids)
+    ipcRenderer.on(IpcChannel.TerminalUnread, listener)
+    return () => ipcRenderer.removeListener(IpcChannel.TerminalUnread, listener)
   },
   // drag & drop された File から OS 上の絶対パスを得る。
   // Electron 32+ では File.path が廃止されたため webUtils を使う（renderer から直接は触れない）。

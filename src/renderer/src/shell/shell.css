@@ -7,6 +7,8 @@
   --fg: #d4d4d4;
   --fg-dim: #888;
   --accent: #0a84ff;
+  /* 操作待ち（ベルが鳴ったが未確認）の印に使う琥珀色。選択色（青）と紛れないよう暖色にする。 */
+  --attention: #e0a54a;
 }
 
 * {
@@ -99,6 +101,16 @@ body {
   height: 7px;
   border-radius: 50%;
   background: var(--fg-dim);
+}
+
+/* 操作待ち（ベルが鳴ったが未確認）マーク。琥珀色の丸で目立たせ、
+   非アクティブタブでも色を保って「どのタブか」を判別できるようにする。 */
+.tab-attention {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--attention);
 }
 
 .tab-close {

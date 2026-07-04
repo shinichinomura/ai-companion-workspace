@@ -33,6 +33,11 @@ function Shell(): JSX.Element {
             }}
           >
             {tab.dirty && <span className="tab-dirty" />}
+            {/* このタブ内に未確認（ベルが鳴ったが未表示）のターミナルがあると印を出す。
+                通知を閉じても、該当ターミナルを開くまで残る。 */}
+            {tab.attention && (
+              <span className="tab-attention" title="操作待ちのターミナルがあります" />
+            )}
             <span className="tab-title">{tab.title}</span>
             {state.tabs.length > 1 && (
               <button
