@@ -35,7 +35,7 @@ import {
 } from './recent-files'
 import { startGitWatching, stopGitWatching } from './git'
 
-// 初期 ignore 対象のディレクトリ名（spec 4.2 / 5.6）。
+// 初期 ignore 対象のディレクトリ名（spec 4.2 / 5.6）。ファイルツリー表示から隠す。
 const IGNORED_DIRS = new Set([
   '.git',
   'node_modules',
@@ -43,6 +43,37 @@ const IGNORED_DIRS = new Set([
   'build',
   '.next',
   'coverage'
+])
+
+// ファイル監視（chokidar）から除外するディレクトリ名。
+// chokidar v4 以降は fsevents を使わず fs.watch(kqueue) で監視するため、macOS では
+// 「監視対象のファイル 1 つにつき fd を 1 つ」開く。.venv や各種キャッシュのように
+// 大量のファイルを含む生成物ディレクトリを監視すると fd が数千〜万単位で消費され、
+// プロセスの fd 上限（Electron では概ね 1 万強）に達する。そうなると新しいターミナルの
+// forkpty が pty 用の fd を確保できず、シェルが tty を初期化できずに即 exit(0)（無出力）
+// してしまう＝「[プロセスが終了しました (code 0)]」の即時表示。
+// これらは編集対象ではなく監視する価値がないため、監視だけ止める（ツリー表示には残す）。
+// IGNORED_DIRS（表示から隠すもの）とは分離し、監視除外はより広く取る。
+const WATCH_IGNORED_DIRS = new Set([
+  ...IGNORED_DIRS,
+  // Python の仮想環境・キャッシュ
+  '.venv',
+  'venv',
+  '.tox',
+  '.mypy_cache',
+  '.ruff_cache',
+  '.pytest_cache',
+  '__pycache__',
+  // JS/その他パッケージ・ビルド生成物
+  '.pnpm-store',
+  '.yarn',
+  '.turbo',
+  '.gradle',
+  '.terraform',
+  'vendor',
+  'target',
+  'out',
+  '.cache'
 ])
 
 // テキストとして開くファイルの上限サイズ（バイト）。これを超えるものは binary 扱い。
@@ -121,8 +152,9 @@ async function startWatching(root: string, target: WebContents): Promise<void> {
   state.watcher = chokidar.watch(root, {
     // 初期スキャンの add イベントは不要（ツリーは readDir で取得済み）。
     ignoreInitial: true,
-    // ignore 対象ディレクトリはパスセグメント単位で除外する。
-    ignored: (p: string) => p.split(sep).some((seg) => IGNORED_DIRS.has(seg)),
+    // 監視除外ディレクトリはパスセグメント単位で除外する。.venv 等の大量ファイルを
+    // 監視すると fd を使い切り、ターミナルが起動できなくなるため広めに除外する。
+    ignored: (p: string) => p.split(sep).some((seg) => WATCH_IGNORED_DIRS.has(seg)),
     // 保存途中の中間状態を読まないよう、書き込み完了を待ってから通知する。
     awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
   })
