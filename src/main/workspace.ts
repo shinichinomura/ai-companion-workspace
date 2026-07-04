@@ -25,7 +25,9 @@ import {
   type RevealPathRequest,
   type CopyPathRequest,
   type AddRecentFileRequest,
-  type RemoveRecentFileRequest
+  type RemoveRecentFileRequest,
+  type AddBookmarkRequest,
+  type RemoveBookmarkRequest
 } from '../shared/ipc'
 import { addRecentFolder, loadRecentFolders, removeRecentFolder } from './settings'
 import {
@@ -34,6 +36,12 @@ import {
   removeRecentFile,
   setRecentFiles
 } from './recent-files'
+import {
+  addBookmark,
+  getBookmarks,
+  removeBookmark,
+  setBookmarks
+} from './bookmarks'
 import { startGitWatching, stopGitWatching } from './git'
 
 // 初期 ignore 対象のディレクトリ名（spec 4.2 / 5.6）。ファイルツリー表示から隠す。
@@ -307,6 +315,47 @@ async function handleRemoveRecentFile(
   return removeRecentFile(root, req.relPath)
 }
 
+// ブックマーク（現在の project root 内）の一覧を返す。
+// ディスク上に無くなったファイルはこの時点で除外し、永続データも掃除する（自動管理）。
+async function handleGetBookmarks(e: Electron.IpcMainInvokeEvent): Promise<string[]> {
+  const root = getProjectRoot(e.sender.id)
+  if (!root) return []
+  const list = await getBookmarks(root)
+  const surviving: string[] = []
+  for (const relPath of list) {
+    try {
+      await fs.stat(join(root, relPath))
+      surviving.push(relPath)
+    } catch {
+      // 削除・リネーム済みのファイルは一覧から落とす。
+    }
+  }
+  if (surviving.length !== list.length) {
+    return setBookmarks(root, surviving)
+  }
+  return list
+}
+
+// ブックマークに relPath を追加し、更新後の一覧を返す。root 未選択なら記録しない。
+async function handleAddBookmark(
+  e: Electron.IpcMainInvokeEvent,
+  req: AddBookmarkRequest
+): Promise<string[]> {
+  const root = getProjectRoot(e.sender.id)
+  if (!root) return []
+  return addBookmark(root, req.relPath)
+}
+
+// ブックマークから relPath を除外し、更新後の一覧を返す。
+async function handleRemoveBookmark(
+  e: Electron.IpcMainInvokeEvent,
+  req: RemoveBookmarkRequest
+): Promise<string[]> {
+  const root = getProjectRoot(e.sender.id)
+  if (!root) return []
+  return removeBookmark(root, req.relPath)
+}
+
 // 指定ディレクトリの直下のエントリを返す（遅延展開のため 1 階層のみ）。
 // ディレクトリを先・名前順でソートして返す。
 async function handleReadDir(
@@ -542,6 +591,9 @@ export function registerWorkspaceHandlers(): void {
   ipcMain.handle(IpcChannel.GetRecentFiles, handleGetRecentFiles)
   ipcMain.handle(IpcChannel.AddRecentFile, handleAddRecentFile)
   ipcMain.handle(IpcChannel.RemoveRecentFile, handleRemoveRecentFile)
+  ipcMain.handle(IpcChannel.GetBookmarks, handleGetBookmarks)
+  ipcMain.handle(IpcChannel.AddBookmark, handleAddBookmark)
+  ipcMain.handle(IpcChannel.RemoveBookmark, handleRemoveBookmark)
   ipcMain.handle(IpcChannel.ReadDir, handleReadDir)
   ipcMain.handle(IpcChannel.ReadFile, handleReadFile)
   ipcMain.handle(IpcChannel.WriteFile, handleWriteFile)

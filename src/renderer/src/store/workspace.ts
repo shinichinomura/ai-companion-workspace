@@ -129,6 +129,8 @@ async function applyOpenResult(
     historyIndex: -1,
     // 最近開いたファイルは root ごとに管理する。切り替え直後は空にし、直後の loadRecentFiles で埋める。
     recentFiles: [],
+    // ブックマークも root ごとに管理する。切り替え直後は空にし、直後の loadBookmarks で埋める。
+    bookmarks: [],
     // 前のフォルダの Git status を持ち越さない。直後に refreshGitStatus で埋め直す。
     gitStatuses: {},
     // 開いたプロジェクト固有の隠しファイル表示設定に切り替える。
@@ -162,6 +164,9 @@ interface WorkspaceState {
   // 最近開いたファイルの relPath 一覧（新しい順、現在の root 内のみ）。
   recentFiles: string[]
 
+  // ブックマークした relPath 一覧（登録順、現在の root 内のみ）。
+  bookmarks: string[]
+
   // 隠しファイル（. で始まる名前）をツリーに表示するか。
   showHidden: boolean
 
@@ -177,6 +182,12 @@ interface WorkspaceState {
   loadRecentFolders: () => Promise<void>
   // 最近開いたファイル一覧を main から取得して反映する（現在の root 内、存在しないものは除外済み）。
   loadRecentFiles: () => Promise<void>
+  // ブックマーク一覧を main から取得して反映する（現在の root 内、存在しないものは除外済み）。
+  loadBookmarks: () => Promise<void>
+  // 指定 relPath をブックマークに追加する（現在の root 内）。
+  addBookmark: (relPath: string) => Promise<void>
+  // 指定 relPath をブックマークから外す。
+  removeBookmark: (relPath: string) => Promise<void>
   // 前回フォルダ（最新の最近開いた一覧）を自動で開き直す。起動時に呼ぶ。
   restoreLastFolder: () => Promise<void>
   // 指定パスのフォルダを開く（最近開いた一覧からの選択）。
@@ -220,6 +231,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   historyIndex: -1,
   recentFolders: [],
   recentFiles: [],
+  bookmarks: [],
   // 起動直後は root 未確定のため既定値で初期化し、フォルダを開いた時点で root 別の値に切り替える。
   showHidden: loadShowHidden(null),
   showOnlyChanged: loadShowOnlyChanged(null),
@@ -232,6 +244,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await get().refreshGitStatus()
     await get().loadRecentFolders()
     await get().loadRecentFiles()
+    await get().loadBookmarks()
   },
 
   // 最近開いた一覧を main から取得して反映する。
@@ -246,6 +259,24 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ recentFiles: recent })
   },
 
+  // ブックマーク一覧を main から取得して反映する（存在しないものは main 側で除外済み）。
+  loadBookmarks: async () => {
+    const list = await window.api.getBookmarks()
+    set({ bookmarks: list })
+  },
+
+  // 指定 relPath をブックマークに追加する。更新後の一覧で置き換える。
+  addBookmark: async (relPath: string) => {
+    const list = await window.api.addBookmark({ relPath })
+    set({ bookmarks: list })
+  },
+
+  // 指定 relPath をブックマークから外す。更新後の一覧で置き換える。
+  removeBookmark: async (relPath: string) => {
+    const list = await window.api.removeBookmark({ relPath })
+    set({ bookmarks: list })
+  },
+
   // 前回フォルダを自動で開き直す。存在しなければ何もしない（一覧は main 側で掃除される）。
   restoreLastFolder: async () => {
     const recent = await window.api.getRecentFolders()
@@ -258,6 +289,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // 開けずに一覧から除外された場合に備えて再取得する。
     await get().loadRecentFolders()
     await get().loadRecentFiles()
+    await get().loadBookmarks()
   },
 
   // 指定パスのフォルダを開く（最近開いた一覧からの選択）。
@@ -267,6 +299,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await get().refreshGitStatus()
     await get().loadRecentFolders()
     await get().loadRecentFiles()
+    await get().loadBookmarks()
   },
 
   // ディレクトリの展開 / 折りたたみ。未読込なら子を取得する。

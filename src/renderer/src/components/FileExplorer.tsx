@@ -455,6 +455,66 @@ function RecentFolders(): JSX.Element {
   )
 }
 
+// 「ブックマーク」セクションの折りたたみ状態を保存する localStorage キー。
+// 開閉は UI の好みなので、プロジェクト（root）ごとには分けず全体で 1 つ持つ。
+const BOOKMARKS_COLLAPSED_KEY = 'bookmarks-collapsed'
+
+// ツリー上部（「最近開いたファイル」の上）に表示する「ブックマーク」の折りたたみセクション。
+// ユーザーが右クリックから固定したファイルを登録順に並べる。空のときは何も表示しない。
+// 行の見た目・折りたたみ挙動は「最近開いたファイル」と共通で、右クリックで解除などの操作ができる。
+function Bookmarks(): JSX.Element | null {
+  const bookmarks = useWorkspaceStore((s) => s.bookmarks)
+  const activeFile = useWorkspaceStore((s) => s.activeFile)
+  const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
+  const { openMenu, menuTargetPath } = useExplorer()
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem(BOOKMARKS_COLLAPSED_KEY) === 'true'
+  )
+
+  // 登録が無いときはセクションごと隠し、ツリーの場所を取らない。
+  if (bookmarks.length === 0) return null
+
+  const toggle = (): void => {
+    setCollapsed((c) => {
+      const next = !c
+      localStorage.setItem(BOOKMARKS_COLLAPSED_KEY, next ? 'true' : 'false')
+      return next
+    })
+  }
+
+  return (
+    <div className="recent-files">
+      <div className="recent-files-header" onClick={toggle}>
+        <span className="tree-twisty">{collapsed ? '▸' : '▾'}</span>
+        <span className="recent-files-title">ブックマーク</span>
+      </div>
+      {!collapsed &&
+        bookmarks.map((relPath) => {
+          const name = baseName(relPath)
+          const dir = parentDir(relPath)
+          const isActive = activeFile?.relPath === relPath
+          const isMenuTarget = menuTargetPath === relPath
+          return (
+            <div
+              key={relPath}
+              className={`recent-file-row${isActive ? ' active' : ''}${isMenuTarget ? ' menu-target' : ''}`}
+              title={relPath}
+              onClick={() => void openFileByRelPath(relPath)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                openMenu({ relPath, name, isDirectory: false }, e.clientX, e.clientY)
+              }}
+            >
+              <span className="tree-icon">📌</span>
+              <span className="recent-file-name">{name}</span>
+              {dir && <span className="recent-file-dir">{dir}</span>}
+            </div>
+          )
+        })}
+    </div>
+  )
+}
+
 // 「最近開いたファイル」セクションの折りたたみ状態を保存する localStorage キー。
 // 開閉は UI の好みなので、プロジェクト（root）ごとには分けず全体で 1 つ持つ。
 const RECENT_FILES_COLLAPSED_KEY = 'recent-files-collapsed'
@@ -518,6 +578,9 @@ function FileExplorer(): JSX.Element {
   const setShowOnlyChanged = useWorkspaceStore((s) => s.setShowOnlyChanged)
   const gitStatuses = useWorkspaceStore((s) => s.gitStatuses)
   const renamePath = useWorkspaceStore((s) => s.renamePath)
+  const bookmarks = useWorkspaceStore((s) => s.bookmarks)
+  const addBookmark = useWorkspaceStore((s) => s.addBookmark)
+  const removeBookmark = useWorkspaceStore((s) => s.removeBookmark)
 
   // 右クリックメニューの状態（null = 非表示）と、リネーム編集中の relPath。
   const [menu, setMenu] = useState<MenuState | null>(null)
@@ -562,18 +625,29 @@ function FileExplorer(): JSX.Element {
   const menuItems = useMemo<MenuItem[]>(() => {
     if (!menu) return []
     const { relPath, isDirectory } = menu.node
-    return [
+    const items: MenuItem[] = [
       // ターミナルの claude へ渡すため、入力欄に `@パス` を挿入する（改行は付けない＝送信はユーザー任せ）。
       {
         label: '@ でターミナルに渡す',
         onSelect: () => insertMention?.(relPath, isDirectory)
-      },
+      }
+    ]
+    // ブックマークはファイルのみ対象。登録済みなら解除、未登録なら追加のトグルにする。
+    if (!isDirectory) {
+      items.push(
+        bookmarks.includes(relPath)
+          ? { label: 'ブックマークから外す', onSelect: () => void removeBookmark(relPath) }
+          : { label: 'ブックマークに追加', onSelect: () => void addBookmark(relPath) }
+      )
+    }
+    items.push(
       { label: '名称変更', onSelect: () => setRenamingPath(relPath) },
       { label: '削除', onSelect: () => void window.api.deletePath({ relPath }) },
       { label: 'Finder で表示', onSelect: () => void window.api.revealPath({ relPath }) },
       { label: 'パスをコピー', onSelect: () => void window.api.copyPath({ relPath }) }
-    ]
-  }, [menu, insertMention])
+    )
+    return items
+  }, [menu, insertMention, bookmarks, addBookmark, removeBookmark])
 
   // 変更を含むフォルダ集合は statuses が変わったときだけ作り直す。
   const changedDirs = useMemo(() => computeChangedDirs(gitStatuses), [gitStatuses])
@@ -636,6 +710,7 @@ function FileExplorer(): JSX.Element {
             )
           ) : (
             <>
+              <Bookmarks />
               <RecentFiles />
               {rootNodes.map((node) => (
                 <TreeNode

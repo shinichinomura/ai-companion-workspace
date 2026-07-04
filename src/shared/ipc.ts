@@ -11,6 +11,10 @@ export const IpcChannel = {
   GetRecentFiles: 'workspace:get-recent-files',
   AddRecentFile: 'workspace:add-recent-file',
   RemoveRecentFile: 'workspace:remove-recent-file',
+  // ブックマーク（現在の project root 内でユーザーが固定したファイル）。relPath 一覧の取得・追加・削除。
+  GetBookmarks: 'workspace:get-bookmarks',
+  AddBookmark: 'workspace:add-bookmark',
+  RemoveBookmark: 'workspace:remove-bookmark',
   ReadDir: 'workspace:read-dir',
   ReadFile: 'workspace:read-file',
   WriteFile: 'workspace:write-file',
@@ -235,6 +239,16 @@ export interface RemoveRecentFileRequest {
   relPath: string
 }
 
+// ブックマークの追加リクエスト。relPath は現在の project root 相対。
+export interface AddBookmarkRequest {
+  relPath: string
+}
+
+// ブックマークの削除リクエスト。relPath は現在の project root 相対。
+export interface RemoveBookmarkRequest {
+  relPath: string
+}
+
 // readDir / readFile のリクエスト。relPath は project root からの相対パス。
 export interface ReadDirRequest {
   relPath: string
@@ -384,6 +398,13 @@ export interface WorkspaceApi {
   addRecentFile: (req: AddRecentFileRequest) => Promise<string[]>
   // 最近開いたファイルから relPath を除外し、更新後の一覧を返す。
   removeRecentFile: (req: RemoveRecentFileRequest) => Promise<string[]>
+  // ブックマーク（現在の project root 内、登録順の relPath 一覧）を取得する。
+  // main 側でディスク上に無くなったファイルは除外して返す。
+  getBookmarks: () => Promise<string[]>
+  // ブックマークに relPath を追加し、更新後の一覧を返す。
+  addBookmark: (req: AddBookmarkRequest) => Promise<string[]>
+  // ブックマークから relPath を除外し、更新後の一覧を返す。
+  removeBookmark: (req: RemoveBookmarkRequest) => Promise<string[]>
   readDir: (req: ReadDirRequest) => Promise<FileNode[]>
   readFile: (req: ReadFileRequest) => Promise<ReadFileResult>
   writeFile: (req: WriteFileRequest) => Promise<WriteFileResult>

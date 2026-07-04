@@ -2,10 +2,12 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import {
   IpcChannel,
+  type AddBookmarkRequest,
   type AddRecentFileRequest,
   type AppSettings,
   type FsEventBatch,
   type OpenFolderByPathRequest,
+  type RemoveBookmarkRequest,
   type RemoveRecentFileRequest,
   type OpenPathRequest,
   type RenamePathRequest,
@@ -39,6 +41,10 @@ const api: WorkspaceApi = {
   addRecentFile: (req: AddRecentFileRequest) => ipcRenderer.invoke(IpcChannel.AddRecentFile, req),
   removeRecentFile: (req: RemoveRecentFileRequest) =>
     ipcRenderer.invoke(IpcChannel.RemoveRecentFile, req),
+  getBookmarks: () => ipcRenderer.invoke(IpcChannel.GetBookmarks),
+  addBookmark: (req: AddBookmarkRequest) => ipcRenderer.invoke(IpcChannel.AddBookmark, req),
+  removeBookmark: (req: RemoveBookmarkRequest) =>
+    ipcRenderer.invoke(IpcChannel.RemoveBookmark, req),
   readDir: (req: ReadDirRequest) => ipcRenderer.invoke(IpcChannel.ReadDir, req),
   readFile: (req: ReadFileRequest) => ipcRenderer.invoke(IpcChannel.ReadFile, req),
   writeFile: (req: WriteFileRequest) => ipcRenderer.invoke(IpcChannel.WriteFile, req),
