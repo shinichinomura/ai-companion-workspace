@@ -1310,6 +1310,43 @@ body {
   background: #333;
 }
 
+/* 補足の注記（fd 枯渇の説明など）。本文よりわずかに強調する。 */
+.settings-section-note {
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+}
+
+.settings-section-note code {
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-size: 10px;
+  padding: 0 3px;
+  background: var(--bg-elev);
+  border-radius: 3px;
+}
+
+/* 監視除外フォルダの編集テキストエリア（1 行 1 フォルダ名）。 */
+.watch-ignore-text {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.watch-ignore-text:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* フッタの確定ボタン群。 */
 .settings-footer {
   flex: 0 0 auto;

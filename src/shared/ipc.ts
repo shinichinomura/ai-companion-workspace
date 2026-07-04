@@ -128,7 +128,43 @@ export interface QuickPrompt {
 // main 側で読み込み時にデフォルト補完するため、項目を増やしても後方互換を保てる。
 export interface AppSettings {
   quickPrompts: QuickPrompt[]
+  // ファイル監視（chokidar）から除外するディレクトリ名。フォルダ名の完全一致で除外する。
+  // 目的はファイルディスクリプタ（fd）枯渇の防止。chokidar は macOS で監視対象ファイル 1 つに
+  // つき fd を 1 つ使うため、.venv のような大量ファイルを含むフォルダを監視すると fd が枯渇し、
+  // 新しいターミナルが起動できず即終了する（[プロセスが終了しました (code 0)]）。
+  watchIgnoredDirs: string[]
 }
+
+// 監視から除外するフォルダ名の初期値。fd 枯渇を避けるため、生成物・キャッシュ・仮想環境など
+// 「編集対象ではなく、監視する価値のない大量ファイルを含むフォルダ」を既定で除外する。
+// これらはファイルツリーには表示される（監視だけを止める）。設定画面で編集できる。
+export const DEFAULT_WATCH_IGNORED_DIRS: string[] = [
+  // バージョン管理・パッケージ・ビルド生成物
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  '.next',
+  'coverage',
+  // Python の仮想環境・キャッシュ
+  '.venv',
+  'venv',
+  '.tox',
+  '.mypy_cache',
+  '.ruff_cache',
+  '.pytest_cache',
+  '__pycache__',
+  // JS/その他パッケージ・ビルド生成物
+  '.pnpm-store',
+  '.yarn',
+  '.turbo',
+  '.gradle',
+  '.terraform',
+  'vendor',
+  'target',
+  'out',
+  '.cache'
+]
 
 // クイック操作の初期値。main の正規化と renderer のフォールバックで共有する。
 export const DEFAULT_QUICK_PROMPTS: QuickPrompt[] = [
@@ -152,7 +188,8 @@ export const DEFAULT_QUICK_PROMPTS: QuickPrompt[] = [
 
 // アプリ設定の初期値。
 export const DEFAULT_APP_SETTINGS: AppSettings = {
-  quickPrompts: DEFAULT_QUICK_PROMPTS
+  quickPrompts: DEFAULT_QUICK_PROMPTS,
+  watchIgnoredDirs: DEFAULT_WATCH_IGNORED_DIRS
 }
 
 // ファイルツリーの 1 ノード。ディレクトリは遅延展開するため children は持たない。

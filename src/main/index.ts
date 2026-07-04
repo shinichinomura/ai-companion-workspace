@@ -6,11 +6,16 @@ import {
   registerWorkspaceHandlers,
   registerMediaProtocol,
   setActiveRootResolver,
+  applyWatchIgnoredDirs,
   disposeWorkspace
 } from './workspace'
 import { registerTerminalHandlers, disposeTerminal } from './terminal'
 import { registerGitHandlers } from './git'
-import { registerAppSettingsHandlers } from './app-settings'
+import {
+  registerAppSettingsHandlers,
+  loadAppSettings,
+  setWatchIgnoredChangeListener
+} from './app-settings'
 import { buildAppMenu, refreshRecentMenu, registerMenuHandlers } from './menu'
 import { createMainWindow, registerTabHandlers, getActiveTabRoot } from './tabs'
 import { MEDIA_SCHEME } from '../shared/ipc'
@@ -34,7 +39,7 @@ protocol.registerSchemesAsPrivileged([
   }
 ])
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.nomura.noetelier')
 
   // macOS 標準の About パネル（アプリメニュー「Noetelier について」）に版情報を出す。
@@ -75,6 +80,10 @@ app.whenReady().then(() => {
   registerGitHandlers()
   // アプリ設定（設定画面）の取得・保存 IPC を登録する。
   registerAppSettingsHandlers()
+  // 監視除外フォルダの設定を反映する。フォルダを開く前に適用しておき（初期監視から反映）、
+  // 以降は設定画面での保存時に開いている監視を貼り直す。
+  setWatchIgnoredChangeListener((dirs) => void applyWatchIgnoredDirs(dirs))
+  await applyWatchIgnoredDirs((await loadAppSettings()).watchIgnoredDirs)
   // タブ（クロームシェル）操作の IPC を登録する。
   registerTabHandlers()
   // 表示メニューのレイアウト連携 IPC を登録し、アプリメニューを構築する。

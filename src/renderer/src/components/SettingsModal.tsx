@@ -1,6 +1,24 @@
 import { useEffect, useState } from 'react'
-import { DEFAULT_QUICK_PROMPTS, type QuickPrompt } from '../../../shared/ipc'
+import {
+  DEFAULT_QUICK_PROMPTS,
+  DEFAULT_WATCH_IGNORED_DIRS,
+  type QuickPrompt
+} from '../../../shared/ipc'
 import { useSettingsStore } from '../store/settings'
+
+// テキストエリアの各行を、監視除外フォルダ名の配列に整える。
+// 空行・前後空白を落とし、パス区切りを含む不正な行は除外し、重複も除く（順序は保つ）。
+function parseWatchDirs(text: string): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const raw of text.split('\n')) {
+    const name = raw.trim()
+    if (!name || name.includes('/') || name.includes('\\') || seen.has(name)) continue
+    seen.add(name)
+    result.push(name)
+  }
+  return result
+}
 
 interface SettingsModalProps {
   // 表示中か。
@@ -18,14 +36,20 @@ function newPrompt(): QuickPrompt {
 // 設定項目はセクションとして追加していける構成にする。最初の項目はターミナルのクイック操作。
 function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | null {
   const quickPrompts = useSettingsStore((s) => s.quickPrompts)
+  const watchIgnoredDirs = useSettingsStore((s) => s.watchIgnoredDirs)
   const save = useSettingsStore((s) => s.save)
 
   // 編集用のローカル状態。モーダルを開くたびにストアの現在値で初期化する（キャンセルで破棄できる）。
   const [prompts, setPrompts] = useState<QuickPrompt[]>([])
+  // 監視除外フォルダは 1 行 1 フォルダ名のテキストとして編集する。
+  const [watchDirsText, setWatchDirsText] = useState('')
 
   useEffect(() => {
-    if (open) setPrompts(quickPrompts.map((q) => ({ ...q })))
-  }, [open, quickPrompts])
+    if (open) {
+      setPrompts(quickPrompts.map((q) => ({ ...q })))
+      setWatchDirsText(watchIgnoredDirs.join('\n'))
+    }
+  }, [open, quickPrompts, watchIgnoredDirs])
 
   // Esc で閉じる。
   useEffect(() => {
@@ -58,10 +82,13 @@ function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | nul
 
   const resetDefaults = (): void => setPrompts(DEFAULT_QUICK_PROMPTS.map((q) => ({ ...q })))
 
+  // 監視除外フォルダを初期値に戻す。
+  const resetWatchDirs = (): void => setWatchDirsText(DEFAULT_WATCH_IGNORED_DIRS.join('\n'))
+
   const handleSave = async (): Promise<void> => {
     // ラベルもプロンプトも空の行は捨てる（main 側でも同様に正規化される）。
     const cleaned = prompts.filter((p) => p.label.trim() || p.prompt.trim())
-    await save({ quickPrompts: cleaned })
+    await save({ quickPrompts: cleaned, watchIgnoredDirs: parseWatchDirs(watchDirsText) })
     onClose()
   }
 
@@ -150,6 +177,35 @@ function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | nul
                 ＋ 追加
               </button>
               <button type="button" onClick={resetDefaults}>
+                デフォルトに戻す
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <h3 className="settings-section-title">監視から除外するフォルダ</h3>
+            <p className="settings-section-desc">
+              ここに挙げたフォルダ名は、ファイル変更の監視対象から外します（フォルダ名の完全一致。
+              1 行に 1 つ）。ファイルツリーには通常どおり表示され、監視だけを止めます。
+            </p>
+            <p className="settings-section-desc settings-section-note">
+              目的はファイルディスクリプタ（fd）の枯渇対策です。macOS のファイル監視は監視対象の
+              ファイル 1 つにつき fd を 1 つ消費するため、<code>.venv</code> のように大量のファイルを
+              含むフォルダ（Python の仮想環境、各種キャッシュ、ビルド生成物など）を監視すると fd を
+              使い切り、新しいターミナルが起動できず即終了（
+              <code>[プロセスが終了しました (code 0)]</code>）することがあります。編集対象でない生成物を
+              ここで除外してください。
+            </p>
+            <textarea
+              className="watch-ignore-text"
+              value={watchDirsText}
+              spellCheck={false}
+              rows={10}
+              placeholder={'.venv\nnode_modules\n__pycache__'}
+              onChange={(e) => setWatchDirsText(e.target.value)}
+            />
+            <div className="quick-prompt-toolbar">
+              <button type="button" onClick={resetWatchDirs}>
                 デフォルトに戻す
               </button>
             </div>

@@ -4,6 +4,7 @@ import { join } from 'path'
 import {
   IpcChannel,
   DEFAULT_QUICK_PROMPTS,
+  DEFAULT_WATCH_IGNORED_DIRS,
   type AppSettings,
   type QuickPrompt
 } from '../shared/ipc'
@@ -16,6 +17,13 @@ import {
 // 読み書きのたびにファイル I/O しないよう、プロセス内にキャッシュする。
 let cache: AppSettings | null = null
 
+// 監視除外フォルダの設定が変わったときの通知先（workspace が watcher を貼り直すために使う）。
+// app-settings は workspace に依存しないよう、リスナー登録方式で疎結合にする（配線は index.ts）。
+let watchIgnoredChangeCb: ((dirs: string[]) => void) | null = null
+export function setWatchIgnoredChangeListener(cb: (dirs: string[]) => void): void {
+  watchIgnoredChangeCb = cb
+}
+
 // 永続化ファイルの絶対パス。app 初期化後にのみ呼べる。
 function settingsFile(): string {
   return join(app.getPath('userData'), 'app-settings.json')
@@ -26,8 +34,27 @@ function settingsFile(): string {
 function normalize(parsed: unknown): AppSettings {
   const obj = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
   return {
-    quickPrompts: normalizeQuickPrompts(obj.quickPrompts)
+    quickPrompts: normalizeQuickPrompts(obj.quickPrompts),
+    watchIgnoredDirs: normalizeWatchIgnoredDirs(obj.watchIgnoredDirs)
   }
+}
+
+// 監視除外フォルダ名の配列を正規化する。配列でなければデフォルトに倒す。
+// 各要素は空白を除いた非空文字列のみ採用し、重複は除く（設定順は保つ）。
+// パス区切りを含む値は「フォルダ名の完全一致」で照合できないため弾く。
+function normalizeWatchIgnoredDirs(value: unknown): string[] {
+  if (!Array.isArray(value)) return [...DEFAULT_WATCH_IGNORED_DIRS]
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue
+    const name = entry.trim()
+    if (!name || name.includes('/') || name.includes('\\')) continue
+    if (seen.has(name)) continue
+    seen.add(name)
+    result.push(name)
+  }
+  return result
 }
 
 // クイック操作配列を正規化する。配列でなければデフォルトに倒す。
@@ -63,6 +90,7 @@ export async function loadAppSettings(): Promise<AppSettings> {
 
 // アプリ設定を保存する。正規化してから書き出し、正規化後の値を返す。
 export async function saveAppSettings(settings: unknown): Promise<AppSettings> {
+  const prev = cache
   const normalized = normalize(settings)
   cache = normalized
   try {
@@ -70,7 +98,17 @@ export async function saveAppSettings(settings: unknown): Promise<AppSettings> {
   } catch {
     // 永続化に失敗してもプロセス内キャッシュは更新済みなので、当該セッションの動作は継続できる。
   }
+  // 監視除外フォルダが変わったときだけ、開いている監視を貼り直すよう通知する。
+  if (!sameStringList(prev?.watchIgnoredDirs, normalized.watchIgnoredDirs)) {
+    watchIgnoredChangeCb?.(normalized.watchIgnoredDirs)
+  }
   return normalized
+}
+
+// 文字列配列が（順序を含めて）等しいか。監視除外の変更検出に使う。
+function sameStringList(a: string[] | undefined, b: string[]): boolean {
+  if (!a || a.length !== b.length) return false
+  return a.every((v, i) => v === b[i])
 }
 
 // 設定取得・保存の IPC を登録する。app ready 後に 1 度だけ呼ぶ。
