@@ -1183,6 +1183,13 @@ body {
   padding: 16px;
 }
 
+/* セクション間に余白と区切り線を入れる（先頭セクションには付けない）。 */
+.settings-section + .settings-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
 .settings-section-title {
   margin: 0 0 4px;
   font-size: 12px;
