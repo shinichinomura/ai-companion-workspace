@@ -931,6 +931,31 @@ body {
   border-left: 1px solid var(--accent);
 }
 
+/* Markdown 目次レールの表示トグル（Edit/Preview トグルの右隣） */
+.toc-toggle-btn {
+  margin-left: 8px;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fg-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 8px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.toc-toggle-btn:hover {
+  color: var(--fg);
+}
+
+.toc-toggle-btn.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 /* ファイル履歴の戻る/進むボタン（エディタヘッダー左端） */
 .history-nav {
   display: inline-flex;
@@ -1095,6 +1120,114 @@ body {
 
 .markdown-preview input[type='checkbox'] {
   margin-right: 0.4em;
+}
+
+/* ===== Markdown 目次（TOC）レール ===== */
+
+/* プレビュー本文と目次レールを左右に並べるレイアウト。
+   スクロールは親 .pane-body が担うため、レール側を sticky で追従させる。
+   目次がないときも単独の本文として自然に左寄せになる。 */
+.md-layout {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 100%;
+}
+
+/* flex 化に伴い本文の基準幅を 860px にする（従来の max-width と同じ狙い）。縮みは許容する。 */
+.md-layout > .markdown-preview {
+  flex: 0 1 860px;
+  min-width: 0;
+}
+
+/* 目次を左右フローに参加させるための器。高さ 0 の sticky 要素として追従させ、
+   実体のレールはこの中に絶対配置でぶら下げる。ドック時は基準幅ぶんの場所を確保して
+   本文の右余白に収める。 */
+.toc-slot {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  flex: 0 0 224px;
+  height: 0;
+}
+
+/* 目次レール本体。器の右端にぶら下げ、長いときは内部スクロールさせる。 */
+.toc-rail {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 216px;
+  max-height: var(--toc-max-h, 80vh);
+  overflow: auto;
+  padding: 6px 4px 6px 10px;
+  border-left: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.toc-list li {
+  margin: 0;
+}
+
+/* 各見出しへのジャンプ項目。レベルに応じて字下げし、1 行に収めて省略表示する。 */
+.toc-item {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 8px;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 0 3px 3px 0;
+  background: transparent;
+  color: var(--fg-dim);
+  font: inherit;
+  line-height: 1.35;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.toc-item:hover {
+  color: var(--fg);
+  background: var(--bg-elev);
+}
+
+/* スクロール追従で現在地の見出しをハイライトする。 */
+.toc-item.active {
+  color: #fff;
+  border-left-color: var(--accent);
+  background: rgba(10, 132, 255, 0.18);
+}
+
+.toc-level-1 {
+  padding-left: 8px;
+}
+.toc-level-2 {
+  padding-left: 20px;
+}
+.toc-level-3 {
+  padding-left: 32px;
+}
+
+/* ペインが狭いときは本文を潰さないよう、器の幅を 0 にして本文を全幅にし、
+   レールだけ右端に浮かせて本文の上にオーバーレイする。 */
+.md-layout--narrow > .toc-slot {
+  flex-basis: 0;
+}
+
+.md-layout--narrow .toc-rail {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 /* ===== CSV / TSV プレビュー ===== */

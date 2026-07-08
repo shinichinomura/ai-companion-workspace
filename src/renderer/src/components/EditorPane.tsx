@@ -16,6 +16,10 @@ function isCsv(relPath: string): boolean {
   return lower.endsWith('.csv') || lower.endsWith('.tsv')
 }
 
+// Markdown プレビューの目次表示状態を保存する localStorage キー。
+// 表示/非表示は UI の好みなので、プロジェクト（root）ごとには分けず全体で 1 つ持つ。
+const TOC_OPEN_KEY = 'md-toc-open'
+
 // 中央ペイン: エディタ / ビューワー。Monaco Editor でテキスト編集と保存を行う。
 function EditorPane(): JSX.Element {
   const activeFile = useWorkspaceStore((s) => s.activeFile)
@@ -41,6 +45,16 @@ function EditorPane(): JSX.Element {
   // Edit / Preview の表示状態。ストアに持たせずペイン内で管理する。
   // 表示ファイルを切り替えてもモード選択は維持する。
   const [view, setView] = useState<'edit' | 'preview'>('edit')
+
+  // Markdown プレビューの目次レールの表示状態（既定は表示）。localStorage に保存する。
+  const [tocOpen, setTocOpen] = useState(() => localStorage.getItem(TOC_OPEN_KEY) !== 'false')
+  const toggleToc = (): void => {
+    setTocOpen((v) => {
+      const next = !v
+      localStorage.setItem(TOC_OPEN_KEY, next ? 'true' : 'false')
+      return next
+    })
+  }
 
   return (
     <div className="pane-inner">
@@ -85,6 +99,17 @@ function EditorPane(): JSX.Element {
                 </button>
               </span>
             )}
+            {markdown && view === 'preview' && (
+              <button
+                className={`toc-toggle-btn${tocOpen ? ' active' : ''}`}
+                onClick={toggleToc}
+                title={tocOpen ? '目次を隠す' : '目次を表示'}
+                aria-label="目次"
+                aria-pressed={tocOpen}
+              >
+                ☰ 目次
+              </button>
+            )}
           </>
         ) : (
           'Editor'
@@ -120,7 +145,7 @@ function EditorPane(): JSX.Element {
           <div className="placeholder">バイナリまたは巨大なファイルのため表示できません</div>
         ) : markdown && view === 'preview' ? (
           // 編集中の最新内容（content）をプレビューする。
-          <MarkdownPreview content={activeFile.content} />
+          <MarkdownPreview content={activeFile.content} showToc={tocOpen} />
         ) : csv && view === 'preview' ? (
           // 編集中の最新内容（content）をテーブルとしてプレビューする。
           <CsvPreview content={activeFile.content} relPath={activeFile.relPath} />
