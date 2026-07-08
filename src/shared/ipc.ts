@@ -18,6 +18,8 @@ export const IpcChannel = {
   ReadDir: 'workspace:read-dir',
   ReadFile: 'workspace:read-file',
   WriteFile: 'workspace:write-file',
+  // project root 配下のテキストファイルを横断検索する（VSCode の Ctrl+Shift+F 相当）。
+  SearchInFiles: 'workspace:search',
   // バイナリ/巨大ファイルを OS の既定アプリ（関連付け）で開く。
   OpenPath: 'workspace:open-path',
   // ファイル/フォルダをリネームする。
@@ -46,6 +48,8 @@ export const IpcChannel = {
   RequestOpenFolderByPath: 'view:request-open-folder-by-path',
   // M→R push: アプリメニューの「設定…」が選ばれた。renderer は設定モーダルを開く。
   OpenSettings: 'view:open-settings',
+  // M→R push: 「編集」メニューの「ファイル内を検索…」（⇧⌘F）が選ばれた。renderer は検索ペインを開く。
+  OpenSearch: 'view:open-search',
 
   // アプリ設定（設定画面）。userData の app-settings.json に永続化する。
   SettingsGet: 'settings:get', // R→M invoke: 現在のアプリ設定を取得する
@@ -282,6 +286,48 @@ export interface WriteFileResult {
   relPath: string
 }
 
+// ファイル横断検索のリクエスト。query は検索文字列（regex=true なら正規表現）。
+export interface SearchRequest {
+  query: string
+  // 大文字小文字を区別するか。
+  caseSensitive: boolean
+  // 単語単位でマッチさせるか（\b で囲む）。
+  wholeWord: boolean
+  // query を正規表現として解釈するか。
+  regex: boolean
+}
+
+// 1 ファイル内の 1 マッチ。行・列は 1 始まり（Monaco の座標系に合わせる）。
+export interface SearchMatch {
+  // マッチした行番号（1 始まり）。
+  line: number
+  // マッチ開始の列（1 始まり、UTF-16 コード単位）。エディタでの選択に使う。
+  column: number
+  // マッチした文字列の長さ（ハイライト範囲・選択範囲に使う）。
+  length: number
+  // 表示用の行プレビュー（長い行はマッチ周辺だけ切り出す）。
+  preview: string
+  // preview 内でのマッチ開始オフセット（0 始まり）。切り詰めで column とはずれるため別に持つ。
+  previewColumn: number
+}
+
+// 1 ファイル分の検索結果。
+export interface SearchFileResult {
+  // project root からの相対パス（'/' 区切り）。
+  relPath: string
+  matches: SearchMatch[]
+}
+
+// 検索結果全体。
+export interface SearchResult {
+  // マッチのあったファイル（ディレクトリ先・名前順）。
+  files: SearchFileResult[]
+  // マッチ総数（上限で打ち切った場合は打ち切り後の数）。
+  totalMatches: number
+  // 上限（総マッチ数・走査ファイル数）に達して打ち切ったか。
+  truncated: boolean
+}
+
 // openPath のリクエスト。relPath は project root からの相対パス。
 export interface OpenPathRequest {
   relPath: string
@@ -419,6 +465,8 @@ export interface WorkspaceApi {
   readDir: (req: ReadDirRequest) => Promise<FileNode[]>
   readFile: (req: ReadFileRequest) => Promise<ReadFileResult>
   writeFile: (req: WriteFileRequest) => Promise<WriteFileResult>
+  // project root 配下のテキストファイルを横断検索する。フォルダ未選択・空クエリは空結果。
+  searchInFiles: (req: SearchRequest) => Promise<SearchResult>
   // バイナリ/巨大ファイルを OS の既定アプリで開く。戻り値は失敗時のエラーメッセージ（成功時は空文字）。
   openPath: (req: OpenPathRequest) => Promise<string>
   // ファイル/フォルダをリネームする。新しい root 相対パスを返す。失敗時は例外。
@@ -446,6 +494,8 @@ export interface WorkspaceApi {
   onRequestOpenFolderByPath: (cb: (path: string) => void) => () => void
   // 「設定…」メニューが選ばれたら通知を受ける。返り値は購読解除関数。
   onOpenSettings: (cb: () => void) => () => void
+  // 「ファイル内を検索…」（⇧⌘F）が選ばれたら通知を受ける。返り値は購読解除関数。
+  onOpenSearch: (cb: () => void) => () => void
 
   // 現在のアプリ設定を取得する。
   getAppSettings: () => Promise<AppSettings>

@@ -2,12 +2,53 @@ import { useEffect, useRef, useState } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import type { ImperativePanelHandle } from 'react-resizable-panels'
 import FileExplorer from './components/FileExplorer'
+import SearchPane from './components/SearchPane'
 import EditorPane from './components/EditorPane'
 import TerminalPane from './components/TerminalPane'
 import SettingsModal from './components/SettingsModal'
 import { useWorkspaceStore } from './store/workspace'
 import { useSettingsStore } from './store/settings'
+import { useSearchStore } from './store/search'
 import type { WorkLayout } from '../../shared/ipc'
+
+// 左端のアクティビティバー。エクスプローラー / 検索の切り替えアイコンを縦に並べる。
+function ActivityBar({
+  view,
+  onSelect
+}: {
+  view: 'explorer' | 'search'
+  onSelect: (view: 'explorer' | 'search') => void
+}): JSX.Element {
+  return (
+    <div className="activity-bar">
+      <button
+        type="button"
+        className={`activity-btn${view === 'explorer' ? ' active' : ''}`}
+        title="エクスプローラー"
+        aria-label="エクスプローラー"
+        aria-pressed={view === 'explorer'}
+        onClick={() => onSelect('explorer')}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h4l2 2.5h7A1.5 1.5 0 0 1 19 8v9.5A1.5 1.5 0 0 1 17.5 19h-13A1.5 1.5 0 0 1 3 17.5z" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={`activity-btn${view === 'search' ? ' active' : ''}`}
+        title="検索（⇧⌘F）"
+        aria-label="検索"
+        aria-pressed={view === 'search'}
+        onClick={() => onSelect('search')}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="10.5" cy="10.5" r="6" />
+          <path d="M15 15l4.5 4.5" />
+        </svg>
+      </button>
+    </div>
+  )
+}
 
 // 折りたたみ時に残すターミナルヘッダーバーの高さ（CSS の .terminal-header と合わせる）。
 const TERMINAL_HEADER_PX = 30
@@ -40,6 +81,10 @@ function App(): JSX.Element {
   const openFolderByPath = useWorkspaceStore((s) => s.openFolderByPath)
   const refreshGitStatus = useWorkspaceStore((s) => s.refreshGitStatus)
   const loadSettings = useSettingsStore((s) => s.load)
+  // 検索ペインの表示状態。左ペインを Explorer と切り替える。
+  const searchOpen = useSearchStore((s) => s.open)
+  const openSearch = useSearchStore((s) => s.openSearch)
+  const closeSearch = useSearchStore((s) => s.closeSearch)
   // 現在のプロジェクト root。UI 設定（レイアウト等）の保存キーに使う。
   const root = useWorkspaceStore((s) => s.root)
   // react-resizable-panels の autoSaveId / 再マウント key に使う root 識別子。
@@ -175,6 +220,12 @@ function App(): JSX.Element {
     return unsubscribe
   }, [])
 
+  // 「編集」メニューの「ファイル内を検索…」（⇧⌘F）を購読し、検索ペインを開いてフォーカスする。
+  useEffect(() => {
+    const unsubscribe = window.api.onOpenSearch(() => openSearch())
+    return unsubscribe
+  }, [openSearch])
+
   // タブ起動時の初期動作。main が query で指示する:
   //   ?root=<path> … 指定フォルダを開く（セッション復元・特定フォルダ起動）
   //   ?restore=1   … 前回フォルダを自動で開き直す（初期タブ。spec 4.2）
@@ -195,53 +246,61 @@ function App(): JSX.Element {
           root 変更（= タブ内でのフォルダ切替）は頻度が低く、その際は元々ターミナルも
           再起動するため、再マウントの副作用は問題にならない。レイアウト方向(左右/上下)の
           切替は rootKey を変えないので、内側 PanelGroup は再マウントされず PTY を保つ。 */}
-      <PanelGroup
-        key={`outer-${rootKey}`}
-        direction="horizontal"
-        autoSaveId={`outer-layout:${rootKey}`}
-      >
-        <Panel defaultSize={20} minSize={12} className="pane pane--soft">
-          <FileExplorer />
-        </Panel>
-        <PanelResizeHandle className="resize-handle" />
-        <Panel defaultSize={80} minSize={30}>
-          {/* Editor と Terminal は内側の PanelGroup でまとめ、方向だけを切り替える。
-              key を付けて再マウントすると Terminal の PTY が破棄されてしまうため、
-              direction prop の変更だけで切り替える（v2 は再マウント不要。サイズは % で保持され方向を変えても崩れない）。
-              ヘッダー相当 % を実測するため PanelGroup を div でラップして寸法を測る。 */}
-          <div className="work-area" ref={workRef}>
-            <PanelGroup direction={layout} autoSaveId={`work-layout:${rootKey}`} className="work-group">
-              <Panel defaultSize={60} minSize={20} className="pane">
-                <EditorPane />
-              </Panel>
-              <PanelResizeHandle className="resize-handle" />
-              {/* collapsible にしてサイズを縮めるだけ。中身（PTY）はマウントしたまま保持する。 */}
-              <Panel
-                ref={terminalPanelRef}
-                defaultSize={40}
-                minSize={15}
-                collapsible
-                collapsedSize={collapsedSize}
-                onCollapse={() => {
-                  setTerminalCollapsed(true)
-                  localStorage.setItem(collapsedKey(root), 'true')
-                }}
-                onExpand={() => {
-                  setTerminalCollapsed(false)
-                  localStorage.setItem(collapsedKey(root), 'false')
-                }}
-                className="pane pane--soft"
-              >
-                <TerminalPane
-                  collapsed={terminalCollapsed}
-                  onToggle={toggleTerminal}
-                  layout={layout}
-                />
-              </Panel>
-            </PanelGroup>
-          </div>
-        </Panel>
-      </PanelGroup>
+      <div className="app-body">
+        {/* 左端のアクティビティバー。エクスプローラー / 検索を切り替える。 */}
+        <ActivityBar
+          view={searchOpen ? 'search' : 'explorer'}
+          onSelect={(v) => (v === 'search' ? openSearch() : closeSearch())}
+        />
+        <PanelGroup
+          key={`outer-${rootKey}`}
+          direction="horizontal"
+          autoSaveId={`outer-layout:${rootKey}`}
+        >
+          {/* 左ペインは検索表示中だけ SearchPane に差し替える（幅・分割はそのまま）。 */}
+          <Panel defaultSize={20} minSize={12} className="pane pane--soft">
+            {searchOpen ? <SearchPane /> : <FileExplorer />}
+          </Panel>
+          <PanelResizeHandle className="resize-handle" />
+          <Panel defaultSize={80} minSize={30}>
+            {/* Editor と Terminal は内側の PanelGroup でまとめ、方向だけを切り替える。
+                key を付けて再マウントすると Terminal の PTY が破棄されてしまうため、
+                direction prop の変更だけで切り替える（v2 は再マウント不要。サイズは % で保持され方向を変えても崩れない）。
+                ヘッダー相当 % を実測するため PanelGroup を div でラップして寸法を測る。 */}
+            <div className="work-area" ref={workRef}>
+              <PanelGroup direction={layout} autoSaveId={`work-layout:${rootKey}`} className="work-group">
+                <Panel defaultSize={60} minSize={20} className="pane">
+                  <EditorPane />
+                </Panel>
+                <PanelResizeHandle className="resize-handle" />
+                {/* collapsible にしてサイズを縮めるだけ。中身（PTY）はマウントしたまま保持する。 */}
+                <Panel
+                  ref={terminalPanelRef}
+                  defaultSize={40}
+                  minSize={15}
+                  collapsible
+                  collapsedSize={collapsedSize}
+                  onCollapse={() => {
+                    setTerminalCollapsed(true)
+                    localStorage.setItem(collapsedKey(root), 'true')
+                  }}
+                  onExpand={() => {
+                    setTerminalCollapsed(false)
+                    localStorage.setItem(collapsedKey(root), 'false')
+                  }}
+                  className="pane pane--soft"
+                >
+                  <TerminalPane
+                    collapsed={terminalCollapsed}
+                    onToggle={toggleTerminal}
+                    layout={layout}
+                  />
+                </Panel>
+              </PanelGroup>
+            </div>
+          </Panel>
+        </PanelGroup>
+      </div>
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )

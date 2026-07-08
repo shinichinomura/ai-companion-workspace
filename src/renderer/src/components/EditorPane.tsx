@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useWorkspaceStore, isDirty } from '../store/workspace'
 import MonacoEditor from './MonacoEditor'
 import MarkdownPreview from './MarkdownPreview'
@@ -23,6 +23,7 @@ const TOC_OPEN_KEY = 'md-toc-open'
 // 中央ペイン: エディタ / ビューワー。Monaco Editor でテキスト編集と保存を行う。
 function EditorPane(): JSX.Element {
   const activeFile = useWorkspaceStore((s) => s.activeFile)
+  const pendingReveal = useWorkspaceStore((s) => s.pendingReveal)
   const updateContent = useWorkspaceStore((s) => s.updateContent)
   const saveActiveFile = useWorkspaceStore((s) => s.saveActiveFile)
   const reloadActiveFromDisk = useWorkspaceStore((s) => s.reloadActiveFromDisk)
@@ -45,6 +46,18 @@ function EditorPane(): JSX.Element {
   // Edit / Preview の表示状態。ストアに持たせずペイン内で管理する。
   // 表示ファイルを切り替えてもモード選択は維持する。
   const [view, setView] = useState<'edit' | 'preview'>('edit')
+
+  // このファイルに対するジャンプ指示（検索結果クリック等）。対象が今開いているファイルのときだけ有効。
+  const activeReveal =
+    pendingReveal && activeFile && pendingReveal.relPath === activeFile.relPath
+      ? pendingReveal
+      : null
+
+  // プレビュー可能なファイル（Markdown/CSV）へジャンプ指示が来たら、行が見えるよう Edit に切り替える
+  // （Preview 表示のままだと Monaco が無く、スクロール・選択できないため）。
+  useEffect(() => {
+    if (activeReveal && previewable) setView('edit')
+  }, [activeReveal, previewable])
 
   // Markdown プレビューの目次レールの表示状態（既定は表示）。localStorage に保存する。
   const [tocOpen, setTocOpen] = useState(() => localStorage.getItem(TOC_OPEN_KEY) !== 'false')
@@ -155,6 +168,16 @@ function EditorPane(): JSX.Element {
             value={activeFile.content}
             onChange={updateContent}
             onSave={saveActiveFile}
+            reveal={
+              activeReveal
+                ? {
+                    line: activeReveal.line,
+                    column: activeReveal.column,
+                    length: activeReveal.length,
+                    seq: activeReveal.seq
+                  }
+                : undefined
+            }
           />
         )}
       </div>

@@ -10,11 +10,14 @@ interface MonacoEditorProps {
   onChange: (value: string) => void
   // Cmd+S 押下時に呼ばれる。
   onSave: () => void
+  // 指定行・列へスクロールして範囲を選択する指示（検索結果クリック等）。
+  // seq が変わるたびに反映する（同じ位置の連続クリックにも追従させるため）。
+  reveal?: { line: number; column: number; length: number; seq: number }
 }
 
 // Monaco Editor の薄いラッパー。エディタ本体は 1 度だけ生成し、
 // path/value の変化に応じてモデルと内容を更新する。
-function MonacoEditor({ path, value, onChange, onSave }: MonacoEditorProps): JSX.Element {
+function MonacoEditor({ path, value, onChange, onSave, reveal }: MonacoEditorProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   // 最新のコールバックを参照するための ref（エディタ再生成を避ける）。
@@ -68,12 +71,34 @@ function MonacoEditor({ path, value, onChange, onSave }: MonacoEditorProps): JSX
 
   // 外部由来で value が変わった場合のみ内容を反映する
   // （ユーザー入力由来の変更ではエディタの現在値と一致するため上書きしない＝カーソル維持）。
+  // reveal 効果より前に置き、ジャンプ前に対象ファイルの内容が反映されているようにする。
   useEffect(() => {
     const editor = editorRef.current
     if (editor && editor.getValue() !== value) {
       editor.setValue(value)
     }
   }, [value])
+
+  // 検索結果クリック等の指示に従い、指定行・列へスクロールして範囲を選択する。
+  // seq をキーにして、同じ位置の連続クリックでも毎回スクロール・選択し直す。
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor || !reveal) return
+    const { line, column, length } = reveal
+    editor.revealLineInCenter(line)
+    editor.setPosition({ lineNumber: line, column })
+    if (length > 0) {
+      editor.setSelection({
+        startLineNumber: line,
+        startColumn: column,
+        endLineNumber: line,
+        endColumn: column + length
+      })
+    }
+    editor.focus()
+    // seq の変化だけをトリガーにする（同一位置の再クリックにも反応させる）。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reveal?.seq])
 
   return <div ref={containerRef} className="monaco-container" />
 }

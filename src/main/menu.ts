@@ -91,6 +91,12 @@ function openSettings(): void {
   getActiveTabWebContents()?.send(IpcChannel.OpenSettings)
 }
 
+// 「ファイル内を検索…」（⇧⌘F）が選ばれたら、アクティブタブの renderer に通知する。
+// 検索ペインは renderer 側で開き、入力欄にフォーカスする。
+function requestOpenSearch(): void {
+  getActiveTabWebContents()?.send(IpcChannel.OpenSearch)
+}
+
 // 最近フォルダ一覧を読み込み直してアプリメニューを再構築する。
 // フォルダを開いて一覧が変化したときに呼ぶ（tabs.ts の rootChanged から）。
 export async function refreshRecentMenu(): Promise<void> {
@@ -165,7 +171,26 @@ export function buildAppMenu(): void {
           : [])
       ]
     },
-    { role: 'editMenu' },
+    {
+      // 標準の編集ロール（取り消し/コピー/貼り付け等）に加え、VSCode 同様
+      // 「ファイル内を検索…」（⇧⌘F）を置く。各ロールのラベルは OS ロケールで自動翻訳される。
+      label: '編集',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+        { type: 'separator' },
+        {
+          label: 'ファイル内を検索…',
+          accelerator: 'CmdOrCtrl+Shift+F',
+          click: () => requestOpenSearch()
+        }
+      ]
+    },
     {
       label: '表示',
       submenu: [

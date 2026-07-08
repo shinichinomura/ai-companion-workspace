@@ -100,10 +100,65 @@ body {
   -webkit-app-region: no-drag;
 }
 
-/* トップバーの分、PanelGroup を残り高さに収める */
-.app > [data-panel-group] {
+/* アプリ本体（アクティビティバー + ペイングループの横並び）。残り高さを占める。 */
+.app-body {
   flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+}
+
+/* 本体内の PanelGroup はアクティビティバーを除いた残り幅を占める。 */
+.app-body > [data-panel-group] {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* 左端のアクティビティバー（エクスプローラー / 検索の切替）。 */
+.activity-bar {
+  flex: 0 0 auto;
+  width: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: 6px;
+  background: var(--bg-elev);
+  border-right: 1px solid var(--border);
+}
+
+/* アクティビティバーのアイコンボタン。選択中は左端にアクセントの縦線を出す。 */
+.activity-btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+.activity-btn:hover {
+  color: var(--fg);
+}
+
+.activity-btn.active {
+  color: var(--fg);
+}
+
+/* 選択中を示す左端の縦バー。 */
+.activity-btn.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--accent);
 }
 
 .pane {
@@ -1541,4 +1596,202 @@ body {
 
 .btn-primary:hover {
   filter: brightness(1.1);
+}
+
+/* ===== ファイル横断検索ペイン ===== */
+
+/* 入力欄・オプション・サマリをまとめる上部の固定領域（ヘッダー直下）。 */
+.search-controls {
+  flex: 0 0 auto;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 検索入力欄とオプショントグルを 1 行に収める。 */
+.search-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px 2px 8px;
+}
+
+.search-input-row:focus-within {
+  border-color: var(--accent);
+}
+
+/* 検索文字列の入力欄。body の user-select:none 下でも編集できるよう text 選択を許可する。 */
+.search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 3px 0;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.search-input::placeholder {
+  color: var(--fg-dim);
+}
+
+/* 大文字小文字・単語単位・正規表現のトグル群。 */
+.search-opts {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* オプショントグル 1 つ。on のときアクセント色で塗る。 */
+.search-opt-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--fg-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.search-opt-btn:hover {
+  color: var(--fg);
+  background: #333;
+}
+
+.search-opt-btn.on {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* 結果サマリ（件数・検索中・エラー・打ち切り）。 */
+.search-summary {
+  margin-top: 6px;
+  padding: 0 2px;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+/* 結果リスト本体（スクロール領域）。ツリーと同様に padding は行側で持たせる。 */
+.search-results {
+  padding: 4px 0;
+}
+
+/* 1 ファイル分のまとまり。 */
+.search-file {
+  margin-bottom: 2px;
+}
+
+/* ファイル見出し行（クリックで折りたたむ）。 */
+.search-file-header {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding-right: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.search-file-header:hover {
+  background: var(--bg-elev);
+}
+
+/* ファイル名。長い名前は省略しつつ、ディレクトリ表示にも幅を譲る。 */
+.search-file-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg);
+}
+
+/* 所属ディレクトリ。淡色で末尾優先の省略（rtl）。 */
+.search-file-dir {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+/* マッチ件数バッジ。 */
+.search-file-count {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--fg-dim);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* マッチ 1 行。行番号 + プレビュー。ツイスティ + アイコン分だけ字下げする。 */
+.search-match-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  height: 22px;
+  padding-left: 34px;
+  padding-right: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.search-match-row:hover {
+  background: var(--bg-elev);
+}
+
+/* 行番号。淡色・右寄せ気味で固定幅にする。 */
+.search-match-line {
+  flex: 0 0 auto;
+  min-width: 28px;
+  font-size: 10px;
+  color: var(--fg-dim);
+  text-align: right;
+}
+
+/* 行プレビュー。長い行は末尾を省略する。空白は保持して字面を再現する。 */
+.search-match-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-size: 11px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+/* マッチ部分のハイライト（VSCode の検索ハイライトに近い琥珀系）。 */
+.search-match-hl {
+  background: rgba(234, 179, 74, 0.32);
+  border-radius: 2px;
+  color: #fff;
 }

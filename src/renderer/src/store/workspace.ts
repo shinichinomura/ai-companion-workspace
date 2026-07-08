@@ -21,6 +21,21 @@ export interface OpenFile {
   externallyDeleted?: boolean
 }
 
+// エディタで特定位置へジャンプ・選択させる指示（検索結果クリック等）。
+// seq は同じ位置を続けてクリックしても再度スクロール・選択させるための単調増加カウンタ。
+export interface PendingReveal {
+  relPath: string
+  // 1 始まりの行・列（Monaco の座標系）。
+  line: number
+  column: number
+  // 選択（ハイライト）する長さ。0 ならキャレット移動のみ。
+  length: number
+  seq: number
+}
+
+// PendingReveal.seq を採番する単調増加カウンタ。
+let revealSeq = 0
+
 // relPath の親ディレクトリの relPath を返す（トップレベルは ''）。
 function parentDir(relPath: string): string {
   const idx = relPath.lastIndexOf('/')
@@ -79,7 +94,9 @@ async function openFileInternal(
   name: string,
   get: () => WorkspaceState,
   set: (partial: Partial<WorkspaceState>) => void,
-  recordHistory = true
+  recordHistory = true,
+  // 指定があれば、開いたあとにエディタをその行・列へスクロールし、範囲を選択する。
+  reveal?: { line: number; column: number; length: number }
 ): Promise<void> {
   const result = await window.api.readFile({ relPath })
   if (result.isBinary) {
@@ -95,7 +112,14 @@ async function openFileInternal(
       content: result.content,
       savedContent: result.content,
       isBinary: result.isBinary
-    }
+    },
+    // テキストとして開けたときだけジャンプ指示を積む（バイナリは reveal しない）。
+    // reveal 指定の無い通常のオープンでは null にクリアする。そうしないと、以前検索から
+    // ジャンプしたファイルを後で普通に開き直した際に、古い位置へ誤ってジャンプしてしまう。
+    pendingReveal:
+      reveal && !result.isBinary
+        ? { relPath, line: reveal.line, column: reveal.column, length: reveal.length, seq: ++revealSeq }
+        : null
   })
   if (recordHistory) {
     pushHistory(relPath, get, set)
@@ -153,6 +177,10 @@ interface WorkspaceState {
   // 中央ペインで開いているファイル。未選択は null。
   activeFile: OpenFile | null
 
+  // エディタへ渡す「この行・列へジャンプして選択せよ」という指示（検索結果クリック等）。
+  // MonacoEditor が seq の変化を検知して反映する。未指定は null。
+  pendingReveal: PendingReveal | null
+
   // ファイル履歴（戻る/進む）。開いたファイルの relPath を新しい順ではなく時系列で積む。
   // historyIndex が現在位置。戻ると index が減り、進むと増える。空のときは -1。
   history: string[]
@@ -197,6 +225,8 @@ interface WorkspaceState {
   // project root 相対パスを指定してファイルを開く（プレビュー内リンク等から呼ぶ）。
   // 開けない（存在しない・ディレクトリ・root 外）場合は何もしない。
   openFileByRelPath: (relPath: string) => Promise<void>
+  // 相対パスのファイルを開き、指定の行・列へジャンプして範囲を選択する（検索結果クリック）。
+  openFileAtLocation: (relPath: string, line: number, column: number, length: number) => Promise<void>
   // ファイル履歴を 1 つ戻る / 進む。端にいるときは何もしない。
   goBack: () => Promise<void>
   goForward: () => Promise<void>
@@ -227,6 +257,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   childrenByDir: {},
   expandedDirs: new Set(),
   activeFile: null,
+  pendingReveal: null,
   history: [],
   historyIndex: -1,
   recentFolders: [],
@@ -345,6 +376,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       } catch {
         // 掃除の失敗は表示に影響しないため無視する。
       }
+    }
+  },
+
+  // 相対パスのファイルを開き、指定の行・列へジャンプして範囲を選択する。
+  // 検索結果クリックから呼ぶ。同じ位置を続けてクリックしても再度スクロールするよう seq を更新する。
+  openFileAtLocation: async (relPath: string, line: number, column: number, length: number) => {
+    try {
+      const name = relPath.slice(relPath.lastIndexOf('/') + 1)
+      await openFileInternal(relPath, name, get, set, true, { line, column, length })
+    } catch {
+      // 読めない（削除・ディレクトリ・root 外）場合は何もしない。
     }
   },
 

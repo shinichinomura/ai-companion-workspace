@@ -1,5 +1,5 @@
 import { clipboard, dialog, ipcMain, shell, protocol, BrowserWindow, type WebContents } from 'electron'
-import { promises as fs } from 'fs'
+import { promises as fs, type Dirent } from 'fs'
 import { basename, extname, join, normalize, relative, sep } from 'path'
 import chokidar, { type FSWatcher } from 'chokidar'
 import {
@@ -17,6 +17,10 @@ import {
   type ReadFileResult,
   type WriteFileRequest,
   type WriteFileResult,
+  type SearchRequest,
+  type SearchMatch,
+  type SearchFileResult,
+  type SearchResult,
   type OpenPathRequest,
   type RenamePathRequest,
   type RenamePathResult,
@@ -403,6 +407,161 @@ async function handleReadFile(
   return { relPath: req.relPath, content: buf.toString('utf8'), isBinary: false }
 }
 
+// ファイル横断検索の上限（暴走・過負荷の防止）。
+// マッチ総数・走査ファイル数・1 ファイルあたりのマッチ数をそれぞれ制限する。
+const SEARCH_MAX_TOTAL_MATCHES = 5000
+const SEARCH_MAX_MATCHES_PER_FILE = 500
+const SEARCH_MAX_FILES_SCANNED = 20000
+// プレビュー行の最大長と、長い行でマッチの前に残す文脈の文字数。
+const SEARCH_PREVIEW_MAX = 300
+const SEARCH_PREVIEW_LEAD = 40
+
+// 検索リクエストから正規表現を組み立てる。regex=false のときは特殊文字をエスケープして
+// リテラル検索にする。wholeWord のときは \b で囲んで単語単位にする。無効な正規表現は例外。
+function buildSearchRegex(req: SearchRequest): RegExp {
+  const flags = req.caseSensitive ? 'g' : 'gi'
+  let pattern = req.regex ? req.query : req.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (req.wholeWord) pattern = `\\b(?:${pattern})\\b`
+  return new RegExp(pattern, flags)
+}
+
+// 1 行からマッチを収集する。remaining はこの行で許容する残りマッチ数。
+// preview は長い行だとマッチ周辺だけ切り出す。previewColumn は切り詰め後のオフセット。
+function collectLineMatches(
+  line: string,
+  re: RegExp,
+  lineNo: number,
+  remaining: number
+): SearchMatch[] {
+  const matches: SearchMatch[] = []
+  re.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(line)) !== null) {
+    const column = m.index + 1
+    const length = m[0].length
+    // 長い行はマッチ周辺だけを切り出してプレビューにする。
+    let start = 0
+    let lead = ''
+    if (line.length > SEARCH_PREVIEW_MAX && m.index > SEARCH_PREVIEW_LEAD) {
+      start = m.index - SEARCH_PREVIEW_LEAD
+      lead = '…'
+    }
+    const preview = lead + line.slice(start, start + SEARCH_PREVIEW_MAX)
+    const previewColumn = lead.length + (m.index - start)
+    matches.push({ line: lineNo, column, length, preview, previewColumn })
+    if (matches.length >= remaining) break
+    // 長さ 0 のマッチ（例: a* が空にマッチ）で無限ループにならないよう前進させる。
+    if (length === 0) re.lastIndex++
+  }
+  return matches
+}
+
+// project root 配下のテキストファイルを横断検索する（spec Phase 2 相当・VSCode の Ctrl+Shift+F）。
+// ツリー非表示ディレクトリ（IGNORED_DIRS）と監視除外ディレクトリ（watchIgnoredDirs）を除外し、
+// node_modules や .venv・.git などの大量ファイルは走査しない。バイナリ/巨大ファイルも除外する。
+// fd 枯渇（terminal の即終了）を避けるため、ファイルは逐次で読む。
+async function handleSearch(
+  e: Electron.IpcMainInvokeEvent,
+  req: SearchRequest
+): Promise<SearchResult> {
+  const root = getProjectRoot(e.sender.id)
+  if (root === null || req.query.length === 0) {
+    return { files: [], totalMatches: 0, truncated: false }
+  }
+  const base = root
+
+  let re: RegExp
+  try {
+    re = buildSearchRegex(req)
+  } catch {
+    // 無効な正規表現。空結果で返す（renderer 側でも事前検証してメッセージを出す）。
+    return { files: [], totalMatches: 0, truncated: false }
+  }
+
+  const files: SearchFileResult[] = []
+  let totalMatches = 0
+  let filesScanned = 0
+  let truncated = false
+
+  // 1 ファイルを検索して結果を積む。
+  const searchFile = async (relPath: string): Promise<void> => {
+    const abs = join(base, relPath)
+    let buf: Buffer
+    try {
+      const stat = await fs.stat(abs)
+      if (!stat.isFile() || stat.size > MAX_TEXT_FILE_SIZE) return
+      buf = await fs.readFile(abs)
+    } catch {
+      return
+    }
+    // NUL バイトを含む場合はバイナリとみなす（readFile と同じ簡易判定）。
+    if (buf.includes(0)) return
+    const lines = buf.toString('utf8').split('\n')
+    const fileMatches: SearchMatch[] = []
+    for (let i = 0; i < lines.length; i++) {
+      // 行末の CR を落として列位置・表示を安定させる。
+      const raw = lines[i]
+      const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
+      const remaining = Math.min(
+        SEARCH_MAX_MATCHES_PER_FILE - fileMatches.length,
+        SEARCH_MAX_TOTAL_MATCHES - totalMatches
+      )
+      if (remaining <= 0) {
+        truncated = true
+        break
+      }
+      const found = collectLineMatches(line, re, i + 1, remaining)
+      if (found.length > 0) {
+        fileMatches.push(...found)
+        totalMatches += found.length
+      }
+      if (totalMatches >= SEARCH_MAX_TOTAL_MATCHES) {
+        truncated = true
+        break
+      }
+    }
+    if (fileMatches.length > 0) {
+      files.push({ relPath, matches: fileMatches })
+    }
+  }
+
+  // ルートから深さ優先で走査する。ツリーと同じくディレクトリ先・名前順で安定させる。
+  const walk = async (relDir: string): Promise<void> => {
+    if (truncated) return
+    let entries: Dirent[]
+    try {
+      entries = await fs.readdir(join(base, relDir), { withFileTypes: true })
+    } catch {
+      return
+    }
+    entries.sort((a, b) => {
+      const ad = a.isDirectory()
+      const bd = b.isDirectory()
+      if (ad !== bd) return ad ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+    for (const entry of entries) {
+      if (truncated) return
+      const childRel = relDir ? `${relDir}/${entry.name}` : entry.name
+      if (entry.isDirectory()) {
+        // 生成物・キャッシュ・.git などは検索対象から外す（非表示 + 監視除外の和集合）。
+        if (IGNORED_DIRS.has(entry.name) || watchIgnoredDirs.has(entry.name)) continue
+        await walk(childRel)
+      } else if (entry.isFile()) {
+        if (filesScanned >= SEARCH_MAX_FILES_SCANNED) {
+          truncated = true
+          return
+        }
+        filesScanned++
+        await searchFile(childRel)
+      }
+    }
+  }
+
+  await walk('')
+  return { files, totalMatches, truncated }
+}
+
 // ファイル内容を UTF-8 テキストとして書き込む。project root 外は resolveWithinRoot で拒否する。
 // 既存パスがディレクトリの場合は拒否する（新規ファイル作成は許可する）。
 async function handleWriteFile(
@@ -597,6 +756,7 @@ export function registerWorkspaceHandlers(): void {
   ipcMain.handle(IpcChannel.ReadDir, handleReadDir)
   ipcMain.handle(IpcChannel.ReadFile, handleReadFile)
   ipcMain.handle(IpcChannel.WriteFile, handleWriteFile)
+  ipcMain.handle(IpcChannel.SearchInFiles, handleSearch)
   ipcMain.handle(IpcChannel.OpenPath, handleOpenPath)
   ipcMain.handle(IpcChannel.RenamePath, handleRenamePath)
   ipcMain.handle(IpcChannel.DeletePath, handleDeletePath)

@@ -16,6 +16,7 @@ import {
   type CopyPathRequest,
   type ReadDirRequest,
   type ReadFileRequest,
+  type SearchRequest,
   type TabsState,
   type TerminalActivateMessage,
   type TerminalActiveChangedMessage,
@@ -49,6 +50,7 @@ const api: WorkspaceApi = {
   readDir: (req: ReadDirRequest) => ipcRenderer.invoke(IpcChannel.ReadDir, req),
   readFile: (req: ReadFileRequest) => ipcRenderer.invoke(IpcChannel.ReadFile, req),
   writeFile: (req: WriteFileRequest) => ipcRenderer.invoke(IpcChannel.WriteFile, req),
+  searchInFiles: (req: SearchRequest) => ipcRenderer.invoke(IpcChannel.SearchInFiles, req),
   openPath: (req: OpenPathRequest) => ipcRenderer.invoke(IpcChannel.OpenPath, req),
   renamePath: (req: RenamePathRequest) => ipcRenderer.invoke(IpcChannel.RenamePath, req),
   deletePath: (req: DeletePathRequest) => ipcRenderer.invoke(IpcChannel.DeletePath, req),
@@ -88,6 +90,11 @@ const api: WorkspaceApi = {
     const listener = (): void => cb()
     ipcRenderer.on(IpcChannel.OpenSettings, listener)
     return () => ipcRenderer.removeListener(IpcChannel.OpenSettings, listener)
+  },
+  onOpenSearch: (cb: () => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IpcChannel.OpenSearch, listener)
+    return () => ipcRenderer.removeListener(IpcChannel.OpenSearch, listener)
   },
   getAppSettings: () => ipcRenderer.invoke(IpcChannel.SettingsGet),
   setAppSettings: (settings: AppSettings) => ipcRenderer.invoke(IpcChannel.SettingsSet, settings),

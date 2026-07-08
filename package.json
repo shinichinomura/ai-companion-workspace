@@ -1,7 +1,7 @@
 {
   "name": "claude-code-companion-workspace",
   "productName": "Noetelier",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "description": "Claude Code を使ったローカルプロジェクト作業を支援する Mac 向けワークスペース",
   "main": "./out/main/index.js",
   "author": "Shinichi Nomura",
