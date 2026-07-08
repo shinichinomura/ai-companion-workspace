@@ -76,8 +76,15 @@ function MarkdownPreview({
     const hs: Heading[] = els
       .filter((el) => el.id)
       .map((el) => ({ el, id: el.id, level: Number(el.tagName[1]), text: el.textContent ?? '' }))
+    // 位置計測・ジャンプは全見出しの実参照を使う。
     headingsRef.current = hs
-    setHeadings(hs.map(({ id, level, text }) => ({ id, level, text })))
+    // 表示用リスト: h1 が 1 つだけなら文書タイトルとみなして目次には載せず、
+    // h2 以降を 1 段繰り上げて表示する（先頭の見出しを最上位レベルにする）。
+    const singleH1 = hs.filter((h) => h.level === 1).length === 1
+    const shown = singleH1 ? hs.filter((h) => h.level !== 1) : hs
+    setHeadings(
+      shown.map((h) => ({ id: h.id, level: singleH1 ? h.level - 1 : h.level, text: h.text }))
+    )
     // 内容が変わると各見出しの位置も変わるため、現在地を取り直す。
     updateActive()
   }, [html, updateActive])
