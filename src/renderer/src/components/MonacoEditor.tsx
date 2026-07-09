@@ -74,13 +74,18 @@ function MonacoEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // path が変わったら言語を更新する。
+  // path が変わったら言語を更新し、スクロール位置を先頭へ戻す。
+  // エディタ本体は使い回すため（モデルの中身だけ差し替える）、別ファイルを開いても
+  // 前のファイルのスクロール位置が残ってしまう。開くたびに先頭へリセットする。
+  // reveal（検索結果ジャンプ等）による移動は後続の effect で行うため、そちらが優先される。
   useEffect(() => {
     const editor = editorRef.current
-    const model = editor?.getModel()
+    if (!editor) return
+    const model = editor.getModel()
     if (model) {
       monaco.editor.setModelLanguage(model, languageFromPath(path))
     }
+    editor.setScrollPosition({ scrollTop: 0, scrollLeft: 0 })
   }, [path])
 
   // 外部由来で value が変わった場合のみ内容を反映する
