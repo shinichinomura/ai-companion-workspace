@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useWorkspaceStore, isDirty } from '../store/workspace'
 import MonacoEditor from './MonacoEditor'
 import MarkdownPreview from './MarkdownPreview'
 import CsvPreview from './CsvPreview'
+import TocRail from './TocRail'
+import { usePreviewToc, useEditorToc } from './useToc'
+import type { monaco } from './monacoSetup'
 
 // Markdown として扱う拡張子か判定する。
 function isMarkdown(relPath: string): boolean {
@@ -46,6 +49,17 @@ function EditorPane(): JSX.Element {
   // Edit / Preview の表示状態。ストアに持たせずペイン内で管理する。
   // 表示ファイルを切り替えてもモード選択は維持する。
   const [view, setView] = useState<'edit' | 'preview'>('edit')
+
+  // 目次（TOC）の情報源はモードで異なる。Preview は描画済み DOM（.pane-body 内）、
+  // Edit は Monaco のソース行番号を使う。どちらも同じ TocRail で右下にフローティング表示する。
+  const paneBodyRef = useRef<HTMLDivElement>(null)
+  const [editor, setEditor] = useState<monaco.editor.IStandaloneCodeEditor | null>(null)
+  const previewMode = markdown && view === 'preview'
+  const editMode = markdown && view === 'edit'
+  const content = activeFile?.content ?? ''
+  const previewToc = usePreviewToc(paneBodyRef, content, previewMode)
+  const editorToc = useEditorToc(editor, content, editMode)
+  const toc = previewMode ? previewToc : editorToc
 
   // このファイルに対するジャンプ指示（検索結果クリック等）。対象が今開いているファイルのときだけ有効。
   const activeReveal =
@@ -112,7 +126,7 @@ function EditorPane(): JSX.Element {
                 </button>
               </span>
             )}
-            {markdown && view === 'preview' && (
+            {markdown && (
               <button
                 className={`toc-toggle-btn${tocOpen ? ' active' : ''}`}
                 onClick={toggleToc}
@@ -151,14 +165,17 @@ function EditorPane(): JSX.Element {
           </button>
         </div>
       )}
-      <div className={`pane-body${previewable && view === 'preview' ? '' : ' editor-body'}`}>
+      <div
+        ref={paneBodyRef}
+        className={`pane-body${previewable && view === 'preview' ? '' : ' editor-body'}`}
+      >
         {!activeFile ? (
           <div className="placeholder">ファイルが選択されていません</div>
         ) : activeFile.isBinary ? (
           <div className="placeholder">バイナリまたは巨大なファイルのため表示できません</div>
         ) : markdown && view === 'preview' ? (
           // 編集中の最新内容（content）をプレビューする。
-          <MarkdownPreview content={activeFile.content} showToc={tocOpen} />
+          <MarkdownPreview content={activeFile.content} />
         ) : csv && view === 'preview' ? (
           // 編集中の最新内容（content）をテーブルとしてプレビューする。
           <CsvPreview content={activeFile.content} relPath={activeFile.relPath} />
@@ -168,6 +185,7 @@ function EditorPane(): JSX.Element {
             value={activeFile.content}
             onChange={updateContent}
             onSave={saveActiveFile}
+            onEditorReady={setEditor}
             reveal={
               activeReveal
                 ? {
@@ -181,6 +199,12 @@ function EditorPane(): JSX.Element {
           />
         )}
       </div>
+      {/* 目次はペイン全体の右下にフローティング表示する（.pane-body の外＝スクロール非追従）。 */}
+      {markdown && tocOpen && toc.headings.length > 0 && (
+        <div className="toc-float">
+          <TocRail headings={toc.headings} activeKey={toc.activeKey} onJump={toc.jump} />
+        </div>
+      )}
     </div>
   )
 }

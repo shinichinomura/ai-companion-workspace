@@ -175,6 +175,8 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* 目次（.toc-float）をペイン右下にフローティングさせる際の位置基準。 */
+  position: relative;
 }
 
 .pane-header {
@@ -1179,44 +1181,31 @@ body {
 
 /* ===== Markdown 目次（TOC）レール ===== */
 
-/* プレビュー本文と目次レールを左右に並べるレイアウト。
-   スクロールは親 .pane-body が担うため、レール側を sticky で追従させる。
-   目次がないときも単独の本文として自然に左寄せになる。 */
-.md-layout {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 100%;
-}
-
-/* flex 化に伴い本文の基準幅を 860px にする（従来の max-width と同じ狙い）。縮みは許容する。 */
-.md-layout > .markdown-preview {
-  flex: 0 1 860px;
-  min-width: 0;
-}
-
-/* 目次を左右フローに参加させるための器。高さ 0 の sticky 要素として追従させ、
-   実体のレールはこの中に絶対配置でぶら下げる。ドック時は基準幅ぶんの場所を確保して
-   本文の右余白に収める。 */
-.toc-slot {
-  position: sticky;
-  top: 0;
-  align-self: flex-start;
-  flex: 0 0 224px;
-  height: 0;
-}
-
-/* 目次レール本体。器の右端にぶら下げ、長いときは内部スクロールさせる。 */
-.toc-rail {
+/* 目次はエディタペインの右下にフローティング表示する。
+   スクロールコンテナ（.pane-body）の外＝.pane-inner 基準で絶対配置し、
+   本文スクロールや Monaco の内部スクロールに関係なく位置を固定する。
+   Edit / Preview どちらのモードでも同じ配置になる。 */
+.toc-float {
   position: absolute;
-  top: 0;
-  right: 0;
-  width: 216px;
-  max-height: var(--toc-max-h, 80vh);
+  right: 16px;
+  bottom: 16px;
+  /* ヘッダーや上端を越えないよう、ペイン高さから余白を引いた範囲に収める。 */
+  max-height: calc(100% - 60px);
+  display: flex;
+  z-index: 5;
+}
+
+/* 目次レール本体。フローティングパネルとして浮かせ、長いときは内部スクロールさせる。 */
+.toc-rail {
+  width: 232px;
+  max-width: 40vw;
+  max-height: 100%;
   overflow: auto;
-  padding: 6px 4px 6px 10px;
-  border-left: 1px solid var(--border);
+  padding: 8px 6px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
   font-size: 12px;
 }
 
@@ -1270,19 +1259,6 @@ body {
 }
 .toc-level-3 {
   padding-left: 32px;
-}
-
-/* ペインが狭いときは本文を潰さないよう、器の幅を 0 にして本文を全幅にし、
-   レールだけ右端に浮かせて本文の上にオーバーレイする。 */
-.md-layout--narrow > .toc-slot {
-  flex-basis: 0;
-}
-
-.md-layout--narrow .toc-rail {
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 /* ===== CSV / TSV プレビュー ===== */

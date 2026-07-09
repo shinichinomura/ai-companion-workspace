@@ -13,18 +13,30 @@ interface MonacoEditorProps {
   // 指定行・列へスクロールして範囲を選択する指示（検索結果クリック等）。
   // seq が変わるたびに反映する（同じ位置の連続クリックにも追従させるため）。
   reveal?: { line: number; column: number; length: number; seq: number }
+  // エディタ本体の生成/破棄を親へ通知する（目次のスクロール追従・ジャンプで使う）。
+  // 生成時にインスタンス、破棄時に null を渡す。
+  onEditorReady?: (editor: monaco.editor.IStandaloneCodeEditor | null) => void
 }
 
 // Monaco Editor の薄いラッパー。エディタ本体は 1 度だけ生成し、
 // path/value の変化に応じてモデルと内容を更新する。
-function MonacoEditor({ path, value, onChange, onSave, reveal }: MonacoEditorProps): JSX.Element {
+function MonacoEditor({
+  path,
+  value,
+  onChange,
+  onSave,
+  reveal,
+  onEditorReady
+}: MonacoEditorProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   // 最新のコールバックを参照するための ref（エディタ再生成を避ける）。
   const onChangeRef = useRef(onChange)
   const onSaveRef = useRef(onSave)
+  const onEditorReadyRef = useRef(onEditorReady)
   onChangeRef.current = onChange
   onSaveRef.current = onSave
+  onEditorReadyRef.current = onEditorReady
 
   // マウント時にエディタを生成し、アンマウント時に破棄する。
   useEffect(() => {
@@ -43,6 +55,7 @@ function MonacoEditor({ path, value, onChange, onSave, reveal }: MonacoEditorPro
       tabSize: 2
     })
     editorRef.current = editor
+    onEditorReadyRef.current?.(editor)
 
     editor.onDidChangeModelContent(() => {
       onChangeRef.current(editor.getValue())
@@ -53,6 +66,7 @@ function MonacoEditor({ path, value, onChange, onSave, reveal }: MonacoEditorPro
     })
 
     return () => {
+      onEditorReadyRef.current?.(null)
       editor.dispose()
       editorRef.current = null
     }
