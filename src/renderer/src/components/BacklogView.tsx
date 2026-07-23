@@ -19,16 +19,9 @@ function matchesQuery(item: KanbanItem, query: string): boolean {
   )
 }
 
-// カンバンのカード 1 枚。タイトル・状態補足・概要・タグ・関連リンクを縦に積む。
-function KanbanCard({
-  item,
-  detailLinkLabel,
-  openRelPath
-}: {
-  item: KanbanItem
-  detailLinkLabel: string
-  openRelPath: string
-}): JSX.Element {
+// カンバンのカード 1 枚。一覧性を重視し、タイトル・状態の括弧補足・タグだけを載せる
+// （概要はホバーのツールチップ、関連リンクは詳細ファイル側で見る）。
+function KanbanCard({ item, openRelPath }: { item: KanbanItem; openRelPath: string }): JSX.Element {
   const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
   const openFileAtLocation = useWorkspaceStore((s) => s.openFileAtLocation)
   const revealActiveFileAt = useWorkspaceStore((s) => s.revealActiveFileAt)
@@ -39,11 +32,6 @@ function KanbanCard({
     if (item.sourceRelPath === openRelPath) revealActiveFileAt(item.line)
     else void openFileAtLocation(item.sourceRelPath, item.line, 1, 0)
   }
-
-  // フッタに出す関連リンク。カードクリックと重複する「詳細」リンク自身は除く。
-  const footerLinks = item.links.filter(
-    (l) => !(l.label === detailLinkLabel && l.relPath === item.detailRelPath)
-  )
 
   return (
     <div
@@ -68,7 +56,6 @@ function KanbanCard({
         </button>
       </div>
       {item.statusNote !== '' && <div className="kanban-card-note">{item.statusNote}</div>}
-      {item.summary !== '' && <div className="kanban-card-summary">{item.summary}</div>}
       {item.tags.length > 0 && (
         <div className="kanban-card-tags">
           {item.tags.map((tag) => (
@@ -76,31 +63,6 @@ function KanbanCard({
               {tag}
             </span>
           ))}
-        </div>
-      )}
-      {footerLinks.length > 0 && (
-        <div className="kanban-card-links">
-          {footerLinks.map((link, i) =>
-            link.relPath ? (
-              <a
-                key={i}
-                className="backlog-link"
-                onClick={(e) => {
-                  // カードクリック（詳細を開く）と分離する。
-                  e.stopPropagation()
-                  e.preventDefault()
-                  void openFileByRelPath(link.relPath!)
-                }}
-              >
-                {link.label}
-              </a>
-            ) : (
-              // 外部 URL。main 側の will-navigate ガードが既定ブラウザで開く。
-              <a key={i} className="backlog-link" href={link.href} onClick={(e) => e.stopPropagation()}>
-                {link.label}
-              </a>
-            )
-          )}
         </div>
       )}
     </div>
@@ -306,7 +268,6 @@ function BacklogView({
                       <KanbanCard
                         key={`${item.sourceRelPath}:${item.line}:${i}`}
                         item={item}
-                        detailLinkLabel={def.detailLinkLabel}
                         openRelPath={openRelPath}
                       />
                     ))}

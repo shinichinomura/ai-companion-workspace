@@ -36,10 +36,8 @@ export interface BacklogItem {
   statusNote: string
   // タグ（tagColumn をカンマ区切りで分割。カラムが無ければ直前の見出しを 1 タグとして使う）。
   tags: string[]
-  // 概要（summaryColumn のセル。無ければ空）。カードで数行にクランプして見せる。
+  // 概要（summaryColumn のセル。無ければ空）。カードのツールチップで見せる。
   summary: string
-  // 行内の全リンク（カードのフッタ表示用。詳細リンク自身も含む）。
-  links: Extract<BacklogInline, { kind: 'link' }>[]
 }
 
 // 解析オプション。既定値は store/backlog.ts の normalize が埋める。
@@ -185,8 +183,7 @@ export function parseBacklogIndex(
               : heading != null
                 ? [heading]
                 : [],
-          summary: summaryIdx >= 0 ? (cells[summaryIdx]?.text.trim() ?? '') : '',
-          links
+          summary: summaryIdx >= 0 ? (cells[summaryIdx]?.text.trim() ?? '') : ''
         })
       }
     }

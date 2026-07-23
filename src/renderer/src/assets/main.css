@@ -1985,18 +1985,6 @@ body {
   color: var(--fg-dim);
 }
 
-/* 概要。カードが縦に伸びすぎないよう 3 行でクランプする（全文はカードのツールチップ）。 */
-.kanban-card-summary {
-  margin-top: 4px;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--fg-dim);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
-}
-
 .kanban-card-tags {
   display: flex;
   flex-wrap: wrap;
@@ -2010,24 +1998,6 @@ body {
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 1px 8px;
-}
-
-.kanban-card-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 8px;
-  margin-top: 6px;
-  font-size: 11px;
-}
-
-.backlog-link {
-  color: var(--accent);
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.backlog-link:hover {
-  text-decoration: underline;
 }
 
 .backlog-jump-btn {
