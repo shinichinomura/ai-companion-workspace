@@ -1771,3 +1771,198 @@ body {
   border-radius: 2px;
   color: #fff;
 }
+
+/* ===== バックログビュー ===== */
+
+/* 中央ペインいっぱいに使う。ツールバーを上部に固定し、本文だけスクロールする。 */
+.backlog-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.backlog-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px 8px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 絞り込み入力。検索ペインの入力欄（.search-input-row）と同じ見た目にする。 */
+.backlog-filter-box {
+  flex: 0 1 320px;
+  min-width: 120px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.backlog-filter-box:focus-within {
+  border-color: var(--accent);
+}
+
+.backlog-filter {
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 3px 0;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.backlog-filter::placeholder {
+  color: var(--fg-dim);
+}
+
+/* 「完了を表示」トグル。on のときアクセント色で塗る。 */
+.backlog-completed-toggle {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--fg-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.backlog-completed-toggle:hover:not(:disabled) {
+  color: var(--fg);
+  background: #333;
+}
+
+.backlog-completed-toggle.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.backlog-completed-toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.backlog-count {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+.backlog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 20px 20px;
+}
+
+.backlog-section {
+  margin-top: 12px;
+}
+
+.backlog-section-title {
+  margin: 8px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.backlog-section-title.completed {
+  color: var(--fg-dim);
+}
+
+/* 「完了」グループの見出し。アクティブ項目群との区切りを線で示す。 */
+.backlog-group-title {
+  margin: 20px 0 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-dim);
+}
+
+/* テーブルは CSV プレビュー（= Markdown のテーブル）と同じ見た目にする。
+   幅いっぱいに広げ、余りは長文カラム（概要等）へ自然に配分させる。 */
+.backlog-view table {
+  border-collapse: collapse;
+  font-size: 0.9em;
+  width: 100%;
+}
+
+/* min-width で短いカラム（作業名等）が 1 文字ずつ縦に折り返されるのを防ぐ。 */
+.backlog-view th,
+.backlog-view td {
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
+  white-space: pre-wrap;
+  vertical-align: top;
+  min-width: 7em;
+}
+
+/* 長文セルは行数をクランプして行の高さを揃える（全文は td の title ツールチップで見られる）。 */
+.backlog-cell {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  overflow: hidden;
+}
+
+.backlog-view th {
+  background: var(--bg-elev);
+}
+
+.backlog-row.clickable {
+  cursor: pointer;
+}
+
+.backlog-row.clickable:hover {
+  background: var(--bg-elev);
+}
+
+/* 完了項目は淡色にして区別する。 */
+.backlog-row.completed {
+  color: var(--fg-dim);
+}
+
+.backlog-link {
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.backlog-link:hover {
+  text-decoration: underline;
+}
+
+/* 索引行ジャンプ列。ボタンだけの細い列にする（min-width の一般則より優先させる）。 */
+.backlog-view .backlog-jump-col {
+  width: 26px;
+  min-width: 0;
+  padding: 5px 4px;
+  text-align: center;
+}
+
+.backlog-jump-btn {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--fg-dim);
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.backlog-jump-btn:hover {
+  color: var(--fg);
+  background: #333;
+}

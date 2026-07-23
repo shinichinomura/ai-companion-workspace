@@ -227,6 +227,9 @@ interface WorkspaceState {
   openFileByRelPath: (relPath: string) => Promise<void>
   // 相対パスのファイルを開き、指定の行・列へジャンプして範囲を選択する（検索結果クリック）。
   openFileAtLocation: (relPath: string, line: number, column: number, length: number) => Promise<void>
+  // 現在開いているファイルの指定行へジャンプ指示だけを積む（バックログビューの索引行ジャンプ）。
+  // openFileAtLocation と違いディスクから読み直さないため、未保存の編集を保持したまま移動できる。
+  revealActiveFileAt: (line: number) => void
   // ファイル履歴を 1 つ戻る / 進む。端にいるときは何もしない。
   goBack: () => Promise<void>
   goForward: () => Promise<void>
@@ -388,6 +391,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } catch {
       // 読めない（削除・ディレクトリ・root 外）場合は何もしない。
     }
+  },
+
+  // 現在開いているファイル内の指定行へジャンプ指示を積む。
+  // ディスクを読み直さず pendingReveal だけを更新するので、dirty な編集内容は失われない
+  // （EditorPane 側の activeReveal 監視が Edit モードへ切り替えて該当行を選択する）。
+  revealActiveFileAt: (line: number) => {
+    const { activeFile } = get()
+    if (!activeFile || activeFile.isBinary) return
+    set({
+      pendingReveal: { relPath: activeFile.relPath, line, column: 1, length: 0, seq: ++revealSeq }
+    })
   },
 
   // ファイル履歴を 1 つ戻る。先頭にいるときは何もしない。

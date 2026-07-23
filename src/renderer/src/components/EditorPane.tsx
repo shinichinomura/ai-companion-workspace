@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspaceStore, isDirty } from '../store/workspace'
+import { useBacklogStore } from '../store/backlog'
 import MonacoEditor from './MonacoEditor'
 import MarkdownPreview from './MarkdownPreview'
 import CsvPreview from './CsvPreview'
+import BacklogView from './BacklogView'
 import TocRail from './TocRail'
 import { usePreviewToc, useEditorToc } from './useToc'
 import type { monaco } from './monacoSetup'
@@ -46,16 +48,34 @@ function EditorPane(): JSX.Element {
   // Edit / Preview トグルを出せるファイル（Markdown または CSV/TSV）。
   const previewable = markdown || csv
 
-  // Edit / Preview の表示状態。ストアに持たせずペイン内で管理する。
+  // 開いているファイルがバックログ索引（.noetelier/backlogs.json で宣言）なら、その定義。
+  const backlogs = useBacklogStore((s) => s.backlogs)
+  const backlogDef = useMemo(
+    () =>
+      markdown && activeFile
+        ? (backlogs.find(
+            (b) => b.activeIndex === activeFile.relPath || b.completedIndex === activeFile.relPath
+          ) ?? null)
+        : null,
+    [markdown, activeFile, backlogs]
+  )
+
+  // Edit / Preview / バックログの表示状態。ストアに持たせずペイン内で管理する。
   // 表示ファイルを切り替えてもモード選択は維持する。
-  const [view, setView] = useState<'edit' | 'preview'>('edit')
+  const [view, setView] = useState<'edit' | 'preview' | 'backlog'>('edit')
+
+  // 索引でないファイルでは 'backlog' を Edit として表示する。state はリセットしないので、
+  // バックログから詳細ファイルを開いて「戻る」で索引に復帰したときにバックログモードが再現される。
+  const effectiveView: 'edit' | 'preview' | 'backlog' =
+    view === 'backlog' && backlogDef == null ? 'edit' : view
+  const backlogMode = effectiveView === 'backlog'
 
   // 目次（TOC）の情報源はモードで異なる。Preview は描画済み DOM（.pane-body 内）、
   // Edit は Monaco のソース行番号を使う。どちらも同じ TocRail で右下にフローティング表示する。
   const paneBodyRef = useRef<HTMLDivElement>(null)
   const [editor, setEditor] = useState<monaco.editor.IStandaloneCodeEditor | null>(null)
-  const previewMode = markdown && view === 'preview'
-  const editMode = markdown && view === 'edit'
+  const previewMode = markdown && effectiveView === 'preview'
+  const editMode = markdown && effectiveView === 'edit'
   const content = activeFile?.content ?? ''
   const previewToc = usePreviewToc(paneBodyRef, content, previewMode)
   const editorToc = useEditorToc(editor, content, editMode)
@@ -113,20 +133,28 @@ function EditorPane(): JSX.Element {
             {previewable && (
               <span className="view-toggle">
                 <button
-                  className={`view-toggle-btn${view === 'edit' ? ' active' : ''}`}
+                  className={`view-toggle-btn${effectiveView === 'edit' ? ' active' : ''}`}
                   onClick={() => setView('edit')}
                 >
                   Edit
                 </button>
                 <button
-                  className={`view-toggle-btn${view === 'preview' ? ' active' : ''}`}
+                  className={`view-toggle-btn${effectiveView === 'preview' ? ' active' : ''}`}
                   onClick={() => setView('preview')}
                 >
                   Preview
                 </button>
+                {backlogDef && (
+                  <button
+                    className={`view-toggle-btn${effectiveView === 'backlog' ? ' active' : ''}`}
+                    onClick={() => setView('backlog')}
+                  >
+                    バックログ
+                  </button>
+                )}
               </span>
             )}
-            {markdown && (
+            {markdown && !backlogMode && (
               <button
                 className={`toc-toggle-btn${tocOpen ? ' active' : ''}`}
                 onClick={toggleToc}
@@ -167,16 +195,25 @@ function EditorPane(): JSX.Element {
       )}
       <div
         ref={paneBodyRef}
-        className={`pane-body${previewable && view === 'preview' ? '' : ' editor-body'}`}
+        className={`pane-body${(previewable && effectiveView === 'preview') || backlogMode ? '' : ' editor-body'}`}
       >
         {!activeFile ? (
           <div className="placeholder">ファイルが選択されていません</div>
         ) : activeFile.isBinary ? (
           <div className="placeholder">バイナリまたは巨大なファイルのため表示できません</div>
-        ) : markdown && view === 'preview' ? (
+        ) : backlogMode && backlogDef ? (
+          // バックログ索引の統合ビュー。編集中の最新内容（content）を解析して表示する。
+          <BacklogView
+            def={backlogDef}
+            openRelPath={activeFile.relPath}
+            content={activeFile.content}
+            // 索引ファイルを切り替えたら（アクティブ⇄完了など）フィルタ等の内部状態をリセットする。
+            key={activeFile.relPath}
+          />
+        ) : markdown && effectiveView === 'preview' ? (
           // 編集中の最新内容（content）をプレビューする。
           <MarkdownPreview content={activeFile.content} />
-        ) : csv && view === 'preview' ? (
+        ) : csv && effectiveView === 'preview' ? (
           // 編集中の最新内容（content）をテーブルとしてプレビューする。
           <CsvPreview content={activeFile.content} relPath={activeFile.relPath} />
         ) : (
@@ -200,7 +237,7 @@ function EditorPane(): JSX.Element {
         )}
       </div>
       {/* 目次はペイン全体の右下にフローティング表示する（.pane-body の外＝スクロール非追従）。 */}
-      {markdown && tocOpen && toc.headings.length > 0 && (
+      {markdown && !backlogMode && tocOpen && toc.headings.length > 0 && (
         <div className="toc-float">
           <TocRail headings={toc.headings} activeKey={toc.activeKey} onJump={toc.jump} />
         </div>

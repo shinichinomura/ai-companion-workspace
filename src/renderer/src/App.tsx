@@ -9,6 +9,7 @@ import SettingsModal from './components/SettingsModal'
 import { useWorkspaceStore } from './store/workspace'
 import { useSettingsStore } from './store/settings'
 import { useSearchStore } from './store/search'
+import { useBacklogStore } from './store/backlog'
 import type { WorkLayout } from '../../shared/ipc'
 
 // 左端のアクティビティバー。エクスプローラー / 検索の切り替えアイコンを縦に並べる。
@@ -85,6 +86,9 @@ function App(): JSX.Element {
   const searchOpen = useSearchStore((s) => s.open)
   const openSearch = useSearchStore((s) => s.openSearch)
   const closeSearch = useSearchStore((s) => s.closeSearch)
+  // バックログ設定（.noetelier/backlogs.json）の読み込みとファイル変更への追従。
+  const loadBacklogConfig = useBacklogStore((s) => s.loadConfig)
+  const handleBacklogFsChanges = useBacklogStore((s) => s.handleFsChanges)
   // 現在のプロジェクト root。UI 設定（レイアウト等）の保存キーに使う。
   const root = useWorkspaceStore((s) => s.root)
   // react-resizable-panels の autoSaveId / 再マウント key に使う root 識別子。
@@ -194,12 +198,20 @@ function App(): JSX.Element {
   }, [openFolderByPath])
 
   // file watcher の変更通知を購読し、ツリー / エディタに反映する（spec 2.2.5）。
+  // バックログ側（設定ファイル・キャッシュ済み索引）にも同じバッチを渡して追従させる。
   useEffect(() => {
     const unsubscribe = window.api.onFsEvent((batch) => {
       void applyFsChanges(batch)
+      handleBacklogFsChanges(batch)
     })
     return unsubscribe
-  }, [applyFsChanges])
+  }, [applyFsChanges, handleBacklogFsChanges])
+
+  // root（開いているプロジェクト）が変わったら、そのプロジェクトのバックログ設定を読み直す。
+  // root 未選択時は読み込みが失敗して設定は空になる（機能が表に出ないだけで正常系）。
+  useEffect(() => {
+    void loadBacklogConfig()
+  }, [root, loadBacklogConfig])
 
   // .git の変化（ターミナルでの commit / add / checkout 等）を購読し、Git status を取り直す。
   useEffect(() => {
