@@ -1786,10 +1786,44 @@ body {
 .backlog-toolbar {
   flex: 0 0 auto;
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.backlog-toolbar-row {
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 20px 8px 20px;
-  border-bottom: 1px solid var(--border);
+}
+
+/* タグ絞り込みチップの列。 */
+.backlog-tagbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.backlog-tag-chip {
+  font-size: 11px;
+  color: var(--fg-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.backlog-tag-chip:hover {
+  color: var(--fg);
+  background: #333;
+}
+
+.backlog-tag-chip.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 /* 絞り込み入力。検索ペインの入力欄（.search-input-row）と同じ見た目にする。 */
@@ -1864,73 +1898,126 @@ body {
   padding: 4px 20px 20px;
 }
 
-.backlog-section {
-  margin-top: 12px;
+/* 完了索引が読めない等の軽い注記。 */
+.backlog-notice {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--fg-dim);
 }
 
-.backlog-section-title {
-  margin: 8px 0 6px;
-  font-size: 13px;
+/* ===== カンバン ===== */
+
+/* レーンを横に並べる。収まらない分は .backlog-body が横スクロールする。 */
+.backlog-kanban {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.kanban-lane {
+  flex: 0 0 270px;
+  min-width: 0;
+}
+
+.kanban-lane-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 2px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
   font-weight: 600;
   color: var(--fg);
 }
 
-.backlog-section-title.completed {
+.kanban-lane-count {
+  font-weight: 400;
+  font-size: 11px;
   color: var(--fg-dim);
 }
 
-/* 「完了」グループの見出し。アクティブ項目群との区切りを線で示す。 */
-.backlog-group-title {
-  margin: 20px 0 4px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--fg-dim);
+.kanban-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
 }
 
-/* テーブルは CSV プレビュー（= Markdown のテーブル）と同じ見た目にする。
-   幅いっぱいに広げ、余りは長文カラム（概要等）へ自然に配分させる。 */
-.backlog-view table {
-  border-collapse: collapse;
-  font-size: 0.9em;
-  width: 100%;
-}
-
-/* min-width で短いカラム（作業名等）が 1 文字ずつ縦に折り返されるのを防ぐ。 */
-.backlog-view th,
-.backlog-view td {
-  border: 1px solid var(--border);
-  padding: 5px 10px;
-  text-align: left;
-  white-space: pre-wrap;
-  vertical-align: top;
-  min-width: 7em;
-}
-
-/* 長文セルは行数をクランプして行の高さを揃える（全文は td の title ツールチップで見られる）。 */
-.backlog-cell {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 6;
-  overflow: hidden;
-}
-
-.backlog-view th {
+.kanban-card {
   background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
 }
 
-.backlog-row.clickable {
+.kanban-card.clickable {
   cursor: pointer;
 }
 
-.backlog-row.clickable:hover {
-  background: var(--bg-elev);
+.kanban-card.clickable:hover {
+  border-color: var(--fg-dim);
 }
 
-/* 完了項目は淡色にして区別する。 */
-.backlog-row.completed {
+/* 完了アーカイブ由来のカードは淡色にして区別する。 */
+.kanban-card.archived {
+  opacity: 0.6;
+}
+
+.kanban-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.kanban-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* 状態の括弧補足（時期の目安・直近の判断など）。 */
+.kanban-card-note {
+  margin-top: 3px;
+  font-size: 11px;
   color: var(--fg-dim);
+}
+
+/* 概要。カードが縦に伸びすぎないよう 3 行でクランプする（全文はカードのツールチップ）。 */
+.kanban-card-summary {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-dim);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.kanban-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.kanban-card-tag {
+  font-size: 10px;
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.kanban-card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-top: 6px;
+  font-size: 11px;
 }
 
 .backlog-link {
@@ -1943,15 +2030,8 @@ body {
   text-decoration: underline;
 }
 
-/* 索引行ジャンプ列。ボタンだけの細い列にする（min-width の一般則より優先させる）。 */
-.backlog-view .backlog-jump-col {
-  width: 26px;
-  min-width: 0;
-  padding: 5px 4px;
-  text-align: center;
-}
-
 .backlog-jump-btn {
+  flex: 0 0 auto;
   font-size: 12px;
   line-height: 1;
   color: var(--fg-dim);

@@ -6,6 +6,9 @@ import type { FsEventBatch } from '../../../shared/ipc'
 // このファイルで索引の場所を宣言する。無いプロジェクトではバックログ機能は一切表に出ない。
 export const BACKLOG_CONFIG_PATH = '.noetelier/backlogs.json'
 
+// カンバンのレーンになる状態名の既定値（順序 = レーンの並び順）。
+export const DEFAULT_STATUSES = ['未着手', '進行中', '完了', '保留', '取り消し']
+
 // 1 つのバックログ定義（正規化済み）。
 export interface BacklogDef {
   // 安定識別子（未指定時は activeIndex）。
@@ -18,6 +21,13 @@ export interface BacklogDef {
   completedIndex: string | null
   // 行クリックで開く「詳細リンク」を探すときのリンクラベル。
   detailLinkLabel: string
+  // カンバンのレーンになる状態名（配列順に並べる。状態セルはこの名前への先頭一致で振り分ける）。
+  statuses: string[]
+  // 索引テーブルのカラム名の対応。ヘッダ行のセル名と完全一致で引き当てる。
+  titleColumn: string
+  statusColumn: string
+  tagColumn: string
+  summaryColumn: string
 }
 
 // 設定ファイルの生 JSON を正規化する。壊れたエントリは除外し、欠損キーは既定値で補う
@@ -33,6 +43,9 @@ function normalize(raw: unknown): BacklogDef[] {
     const activeIndex = normalizeRelPath(e.activeIndex)
     if (!activeIndex) continue
     const completedIndex = normalizeRelPath(e.completedIndex)
+    const statuses = Array.isArray(e.statuses)
+      ? e.statuses.filter((s): s is string => typeof s === 'string' && s.trim() !== '')
+      : []
     defs.push({
       id: typeof e.id === 'string' && e.id !== '' ? e.id : activeIndex,
       name:
@@ -41,13 +54,20 @@ function normalize(raw: unknown): BacklogDef[] {
           : activeIndex.slice(activeIndex.lastIndexOf('/') + 1),
       activeIndex,
       completedIndex: completedIndex || null,
-      detailLinkLabel:
-        typeof e.detailLinkLabel === 'string' && e.detailLinkLabel !== ''
-          ? e.detailLinkLabel
-          : '詳細'
+      detailLinkLabel: str(e.detailLinkLabel, '詳細'),
+      statuses: statuses.length > 0 ? statuses : DEFAULT_STATUSES,
+      titleColumn: str(e.titleColumn, '作業'),
+      statusColumn: str(e.statusColumn, '状態'),
+      tagColumn: str(e.tagColumn, 'タグ'),
+      summaryColumn: str(e.summaryColumn, '概要')
     })
   }
   return defs
+}
+
+// 空でない文字列ならそれを、そうでなければ既定値を返す。
+function str(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value !== '' ? value : fallback
 }
 
 // 設定に書かれたパスを root 相対の relPath へ整える（先頭の './' や '/' を除去）。
