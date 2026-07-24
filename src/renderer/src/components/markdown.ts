@@ -8,7 +8,8 @@ import remarkGfm from 'remark-gfm'
 import remarkRehype from 'remark-rehype'
 import rehypeRaw from 'rehype-raw'
 import rehypeSlug from 'rehype-slug'
-import rehypeSanitize from 'rehype-sanitize'
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
+import type { Options as SanitizeSchema } from 'rehype-sanitize'
 import rehypeStringify from 'rehype-stringify'
 import { visit, SKIP } from 'unist-util-visit'
 import { VFile } from 'vfile'
@@ -136,6 +137,270 @@ function rehypeResolveMedia() {
   }
 }
 
+// ===== インライン SVG 対応のサニタイズスキーマ =====
+// Markdown 内に直接書かれた <svg>（Claude Code が生成する図など）を、安全な範囲で表示する。
+// 方針:
+// - 描画系のタグ・属性のみホワイトリストで許可する
+// - script / foreignObject / SMIL アニメーション / <style> 要素 / イベントハンドラ属性は
+//   デフォルトスキーマ同様に許可しない（<style> はスコープされず文書全体に効くため不可）
+// - 参照系属性（href・clip-path 等の url()）はドキュメント内フラグメント参照のみ許可する
+// - style「属性」は許可する。外部 URL の混入は index.html の CSP（default-src 'self'）が
+//   最終防衛線として遮断する
+// 属性名は hast のプロパティ名（camelCase。例: stroke-width → strokeWidth）で指定する。
+
+type SvgAttributeList = NonNullable<SanitizeSchema['attributes']>[string]
+
+// url(#id) 形式のローカル参照のみ許可する値制限。
+const svgLocalUrl = /^url\(['"]?#/
+
+// ドキュメント内フラグメント（#id）参照のみ許可する href（xlink:href は旧形式 SVG 用）。
+const svgLocalHref: SvgAttributeList = [
+  ['href', /^#/],
+  ['xLinkHref', /^#/]
+]
+
+// 描画系 SVG 要素に共通で許可する表示属性（イベントハンドラ・外部参照になり得るものは含めない）。
+const svgPresentation: SvgAttributeList = [
+  'style',
+  'className',
+  'color',
+  'display',
+  'visibility',
+  'overflow',
+  'opacity',
+  'transform',
+  'fill',
+  'fillOpacity',
+  'fillRule',
+  'stroke',
+  'strokeWidth',
+  'strokeOpacity',
+  'strokeLinecap',
+  'strokeLinejoin',
+  'strokeDasharray',
+  'strokeDashoffset',
+  'strokeMiterlimit',
+  'fontFamily',
+  'fontSize',
+  'fontStyle',
+  'fontWeight',
+  'fontVariant',
+  'letterSpacing',
+  'wordSpacing',
+  'textAnchor',
+  'dominantBaseline',
+  'baselineShift',
+  'textDecoration',
+  'vectorEffect',
+  'paintOrder',
+  'shapeRendering',
+  'clipRule',
+  ['clipPath', 'none', svgLocalUrl],
+  ['mask', 'none', svgLocalUrl],
+  ['filter', 'none', svgLocalUrl],
+  ['markerStart', 'none', svgLocalUrl],
+  ['markerMid', 'none', svgLocalUrl],
+  ['markerEnd', 'none', svgLocalUrl]
+]
+
+// フィルタプリミティブ（feGaussianBlur 等）に共通で許可する属性。
+const svgFilterPrimitive: SvgAttributeList = [
+  'x',
+  'y',
+  'in',
+  'in2',
+  'result',
+  'mode',
+  'type',
+  'values',
+  'stdDeviation',
+  'dx',
+  'dy',
+  'floodColor',
+  'floodOpacity',
+  'operator',
+  'k1',
+  'k2',
+  'k3',
+  'k4',
+  'radius',
+  'tableValues',
+  'slope',
+  'intercept',
+  'amplitude',
+  'exponent',
+  'offset',
+  'baseFrequency',
+  'numOctaves',
+  'seed',
+  'stitchTiles',
+  'edgeMode'
+]
+
+// デフォルト（GitHub 相当）に SVG の描画系タグ・属性を加えたスキーマ。
+// width / height / id / title は defaultSchema のグローバル属性（'*'）で既に許可されている。
+const sanitizeSchema: SanitizeSchema = {
+  ...defaultSchema,
+  // script（デフォルト）に加えて中身ごと除去するタグ。
+  // - style: スコープされず文書全体に効く。タグだけ剥がすと CSS テキストが本文に露出するため中身ごと落とす
+  // - foreignObject: タグだけ剥がすと中の HTML が SVG 内に残り、再パース時に SVG が分断されるため中身ごと落とす
+  strip: [...(defaultSchema.strip ?? []), 'style', 'foreignObject'],
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    'svg',
+    'g',
+    'defs',
+    'symbol',
+    'use',
+    'title',
+    'desc',
+    'path',
+    'rect',
+    'circle',
+    'ellipse',
+    'line',
+    'polyline',
+    'polygon',
+    'text',
+    'tspan',
+    'textPath',
+    'linearGradient',
+    'radialGradient',
+    'stop',
+    'pattern',
+    'clipPath',
+    'mask',
+    'marker',
+    'filter',
+    'feBlend',
+    'feColorMatrix',
+    'feComponentTransfer',
+    'feComposite',
+    'feDropShadow',
+    'feFlood',
+    'feFuncA',
+    'feFuncB',
+    'feFuncG',
+    'feFuncR',
+    'feGaussianBlur',
+    'feMerge',
+    'feMergeNode',
+    'feMorphology',
+    'feOffset',
+    'feTurbulence'
+  ],
+  attributes: {
+    ...defaultSchema.attributes,
+    svg: [...svgPresentation, 'viewBox', 'preserveAspectRatio', 'xmlns', 'xmlnsXLink', 'version', 'x', 'y', 'role'],
+    g: [...svgPresentation],
+    defs: [...svgPresentation],
+    symbol: [...svgPresentation, 'viewBox', 'preserveAspectRatio', 'refX', 'refY'],
+    use: [...svgPresentation, ...svgLocalHref, 'x', 'y'],
+    path: [...svgPresentation, 'd', 'pathLength'],
+    rect: [...svgPresentation, 'x', 'y', 'rx', 'ry', 'pathLength'],
+    circle: [...svgPresentation, 'cx', 'cy', 'r', 'pathLength'],
+    ellipse: [...svgPresentation, 'cx', 'cy', 'rx', 'ry', 'pathLength'],
+    line: [...svgPresentation, 'x1', 'y1', 'x2', 'y2', 'pathLength'],
+    polyline: [...svgPresentation, 'points', 'pathLength'],
+    polygon: [...svgPresentation, 'points', 'pathLength'],
+    text: [...svgPresentation, 'x', 'y', 'dx', 'dy', 'rotate', 'textLength', 'lengthAdjust'],
+    tspan: [...svgPresentation, 'x', 'y', 'dx', 'dy', 'rotate', 'textLength', 'lengthAdjust'],
+    textPath: [...svgPresentation, ...svgLocalHref, 'startOffset', 'method', 'spacing', 'side'],
+    linearGradient: [...svgLocalHref, 'x1', 'y1', 'x2', 'y2', 'gradientUnits', 'gradientTransform', 'spreadMethod'],
+    radialGradient: [
+      ...svgLocalHref,
+      'cx',
+      'cy',
+      'r',
+      'fx',
+      'fy',
+      'fr',
+      'gradientUnits',
+      'gradientTransform',
+      'spreadMethod'
+    ],
+    stop: ['offset', 'stopColor', 'stopOpacity', 'style'],
+    pattern: [
+      ...svgLocalHref,
+      'x',
+      'y',
+      'viewBox',
+      'preserveAspectRatio',
+      'patternUnits',
+      'patternContentUnits',
+      'patternTransform'
+    ],
+    clipPath: [...svgPresentation, 'clipPathUnits'],
+    mask: [...svgPresentation, 'maskUnits', 'maskContentUnits', 'x', 'y'],
+    marker: [
+      ...svgPresentation,
+      'viewBox',
+      'preserveAspectRatio',
+      'refX',
+      'refY',
+      'markerWidth',
+      'markerHeight',
+      'markerUnits',
+      'orient'
+    ],
+    filter: ['x', 'y', 'filterUnits', 'primitiveUnits'],
+    feBlend: [...svgFilterPrimitive],
+    feColorMatrix: [...svgFilterPrimitive],
+    feComponentTransfer: [...svgFilterPrimitive],
+    feComposite: [...svgFilterPrimitive],
+    feDropShadow: [...svgFilterPrimitive],
+    feFlood: [...svgFilterPrimitive],
+    feFuncA: [...svgFilterPrimitive],
+    feFuncB: [...svgFilterPrimitive],
+    feFuncG: [...svgFilterPrimitive],
+    feFuncR: [...svgFilterPrimitive],
+    feGaussianBlur: [...svgFilterPrimitive],
+    feMerge: [...svgFilterPrimitive],
+    feMergeNode: [...svgFilterPrimitive],
+    feMorphology: [...svgFilterPrimitive],
+    feOffset: [...svgFilterPrimitive],
+    feTurbulence: [...svgFilterPrimitive]
+  }
+}
+
+// sanitize は DOM clobbering 対策で id を `user-content-` プレフィックス付きへ書き換えるため、
+// SVG 内の url(#id)・href="#id" によるローカル参照（グラデーション・クリップ・マーカー等）が
+// そのままでは参照先を見失う。sanitize の後段で SVG サブツリー内の参照を同じプレフィックスで
+// 書き換えて追従させる rehype プラグイン。
+const CLOBBER_PREFIX = 'user-content-'
+
+// href でローカル参照を行う SVG 要素。<a> は対象外
+// （見出しアンカーへのリンクはクリックハンドラ側が user-content- 付き id を解決する）。
+const SVG_HREF_REF_TAGS = new Set(['use', 'textPath', 'linearGradient', 'radialGradient', 'pattern'])
+
+function rehypeSvgLocalRefs() {
+  return (tree: HastRoot): void => {
+    visit(tree, 'element', (node) => {
+      if (node.tagName !== 'svg') return
+      visit(node, 'element', (el) => {
+        if (!el.properties) return
+        for (const [key, value] of Object.entries(el.properties)) {
+          // fill / clip-path / style 属性などに現れる url(#id) 参照。
+          if (typeof value === 'string' && value.includes('url(')) {
+            el.properties[key] = value.replace(/url\((['"]?)#/g, `url($1#${CLOBBER_PREFIX}`)
+          }
+        }
+        if (SVG_HREF_REF_TAGS.has(el.tagName)) {
+          for (const key of ['href', 'xLinkHref']) {
+            const v = el.properties[key]
+            if (typeof v === 'string' && v.startsWith('#')) {
+              el.properties[key] = `#${CLOBBER_PREFIX}${v.slice(1)}`
+            }
+          }
+        }
+      })
+      // svg 内は上の visit で処理済みなので、外側の走査では子孫へ降りない
+      // （ネストした svg の二重書き換えを防ぐ）。
+      return SKIP
+    })
+  }
+}
+
 // パイプラインは状態を持たないので使い回す。
 // GFM 相当の基本記法（表・打消し線・タスクリスト・自動リンク）に対応する。
 const processor = unified()
@@ -154,10 +419,12 @@ const processor = unified()
   // 見出しに id（スラッグ）を付与し、`[目次](#section)` のようなアンカーリンクを成立させる。
   // sanitize より前に実行する（生成された id は sanitize 側で user-content- が付与される）。
   .use(rehypeSlug)
-  // デフォルトスキーマ（GitHub 相当）でサニタイズする。raw HTML 由来の要素もここで無害化し、
-  // 任意スクリプトや許可外タグ・属性を落とす（`<img>`/`<a>`/width 等は許可される）。
+  // デフォルトスキーマ（GitHub 相当）+ インライン SVG 許可のスキーマでサニタイズする。
+  // raw HTML 由来の要素もここで無害化し、任意スクリプトや許可外タグ・属性を落とす。
   // 見出しの id は user-content- プレフィックス付きで保持される（DOM clobbering 対策）。
-  .use(rehypeSanitize)
+  .use(rehypeSanitize, sanitizeSchema)
+  // id の user-content- 化に合わせて、SVG 内のローカル参照（url(#id) 等）を追従させる。
+  .use(rehypeSvgLocalRefs)
   // sanitize 後に、相対パス画像をアプリ内配信用のカスタムスキーム URL へ書き換える。
   .use(rehypeResolveMedia)
   .use(rehypeStringify)

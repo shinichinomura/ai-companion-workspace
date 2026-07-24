@@ -1111,6 +1111,12 @@ body {
   border-radius: 6px;
 }
 
+.markdown-preview svg {
+  /* インライン SVG もペイン幅に収める。height は属性値を活かす
+     （viewBox が無い SVG で height:auto にすると既定の 150px に潰れるため指定しない）。 */
+  max-width: 100%;
+}
+
 .markdown-preview a {
   color: var(--accent);
   text-decoration: none;
