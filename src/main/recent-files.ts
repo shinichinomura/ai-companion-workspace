@@ -8,7 +8,7 @@ import { join } from 'path'
 // root（絶対パス）ごとに relPath のリストを分けて保持する。
 
 // 1 つの root あたりの保持最大件数。
-const MAX_RECENT_FILES = 15
+const MAX_RECENT_FILES = 5
 
 // root（絶対パス）→ relPath 配列（新しい順）のマップ。プロセス内キャッシュ。
 let cache: Record<string, string[]> | null = null
@@ -40,9 +40,10 @@ async function loadAll(): Promise<Record<string, string[]>> {
 }
 
 // 指定 root の最近開いたファイル一覧（新しい順）を返す。
+// 上限を減らした後に旧上限で保存された一覧を読む場合に備え、読み出し時にも切り詰める。
 export async function getRecentFiles(root: string): Promise<string[]> {
   const all = await loadAll()
-  return all[root] ?? []
+  return (all[root] ?? []).slice(0, MAX_RECENT_FILES)
 }
 
 // 指定 root の一覧の先頭に relPath を追加する。重複は除去し、上限で切り詰める。更新後の一覧を返す。
