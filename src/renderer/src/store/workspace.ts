@@ -42,6 +42,11 @@ function parentDir(relPath: string): string {
   return idx === -1 ? '' : relPath.slice(0, idx)
 }
 
+// watcher の 1 バッチに含まれる新規作成（add）をこの件数まで「最近開いたファイル」に記録する。
+// これを超える add は git checkout・clone・scaffold 等の一括生成とみなし、
+// 手動／AI が個別に作ったファイルの履歴が流れてしまわないよう記録しない。
+const RECENT_FILES_BULK_ADD_LIMIT = 5
+
 // 隠しファイル表示設定の localStorage キー。プロジェクト（root）ごとに分ける。
 // 全タブは localStorage を共有するため、root をキーに含めてタブ（プロジェクト）単位で保存する。
 function showHiddenKey(root: string | null): string {
@@ -509,7 +514,25 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // ディスク上の変更に追従して Git status も取り直す（追加/変更/削除マークの更新）。
     void get().refreshGitStatus()
 
-    // 2. 開いているファイルへの反映。
+    // 2. 新規作成されたファイルを「最近開いたファイル」に記録する。
+    // ターミナルの Claude Code 等が生成したファイルを、ツリーを辿らずすぐ開けるようにする。
+    // 一括生成（RECENT_FILES_BULK_ADD_LIMIT 超の add を含むバッチ）は記録しない。
+    const addedFiles = [
+      ...new Set(batch.changes.filter((c) => c.kind === 'add').map((c) => c.relPath))
+    ]
+    if (addedFiles.length > 0 && addedFiles.length <= RECENT_FILES_BULK_ADD_LIMIT) {
+      try {
+        let list: string[] = get().recentFiles
+        for (const relPath of addedFiles) {
+          list = await window.api.addRecentFile({ relPath })
+        }
+        set({ recentFiles: list })
+      } catch {
+        // 記録の失敗は表示に影響しないため無視する。
+      }
+    }
+
+    // 3. 開いているファイルへの反映。
     const active = get().activeFile
     if (!active) return
     const change = batch.changes.find((c) => c.relPath === active.relPath)
