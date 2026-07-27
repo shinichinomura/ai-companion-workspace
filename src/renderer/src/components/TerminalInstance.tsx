@@ -27,7 +27,9 @@ interface TerminalInstanceProps {
   // マウント時にハンドルを登録、アンマウント時に null で解除する。
   setHandle: (id: string, handle: TerminalHandle | null) => void
   // シェルの終了/再起動でこのターミナルの終了状態が変わったら親に通知する。
-  onExitedChange: (id: string, exited: boolean) => void
+  // exited=true のとき、PTY の終了コードが分かる場合は exitCode を添える
+  // （起動エラーなど PTY 由来でない終了では undefined）。親はこれでタブの自動クローズを判断する。
+  onExitedChange: (id: string, exited: boolean, exitCode?: number) => void
 }
 
 function TerminalInstance({
@@ -113,10 +115,11 @@ function TerminalInstance({
     })
 
     // プロセス終了通知。自分宛てなら終了状態を立て、再起動できるようにする。
+    // exitCode を親に渡し、正常終了ならタブごと閉じるかどうかは親に委ねる。
     const offExit = window.api.onTerminalExit((exit) => {
       if (!disposed && exit.id === id) {
         term.writeln(`\r\n\x1b[90m[プロセスが終了しました (code ${exit.exitCode})]\x1b[0m`)
-        onExitedRef.current(id, true)
+        onExitedRef.current(id, true, exit.exitCode)
       }
     })
 

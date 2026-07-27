@@ -67,7 +67,14 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
     if (handle) handlesRef.current.set(id, handle)
     else handlesRef.current.delete(id)
   }
-  const handleExitedChange = (id: string, ex: boolean): void => {
+  const handleExitedChange = (id: string, ex: boolean, exitCode?: number): void => {
+    // シェルが正常終了（`exit` / Ctrl-D、code 0）したらタブごと自動で閉じる。
+    // 異常終了（code != 0）は原因を読めるようタブを残して終了表示に留める。
+    // 最後の 1 タブはペインを空にしない設計のため閉じず、終了表示＋再起動ボタンに任せる。
+    if (ex && exitCode === 0 && tabs.length > 1) {
+      closeTerminal(id)
+      return
+    }
     setExited((m) => ({ ...m, [id]: ex }))
   }
 
