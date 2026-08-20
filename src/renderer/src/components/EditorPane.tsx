@@ -61,13 +61,21 @@ function EditorPane(): JSX.Element {
   )
 
   // Edit / Preview / バックログの表示状態。ストアに持たせずペイン内で管理する。
-  // 表示ファイルを切り替えてもモード選択は維持する。
   const [view, setView] = useState<'edit' | 'preview' | 'backlog'>('edit')
 
-  // 索引でないファイルでは 'backlog' を Edit として表示する。state はリセットしないので、
-  // バックログから詳細ファイルを開いて「戻る」で索引に復帰したときにバックログモードが再現される。
+  // Markdown はファイルを開くたびに Preview を既定モードにする（読む用途が主のため）。
+  // 'backlog' のときは維持する（索引に「戻る」で復帰したときバックログモードを再現するため）。
+  // 検索結果からのジャンプ時は後段の effect が Edit に切り替えるので、そちらが優先される。
+  const relPath = activeFile?.relPath ?? null
+  useEffect(() => {
+    if (markdown) setView((v) => (v === 'backlog' ? v : 'preview'))
+  }, [relPath, markdown])
+
+  // 索引でないファイルでは 'backlog' を既定モード（Markdown は Preview、それ以外は Edit）として
+  // 表示する。state はリセットしないので、バックログから詳細ファイルを開いて「戻る」で索引に
+  // 復帰したときにバックログモードが再現される。
   const effectiveView: 'edit' | 'preview' | 'backlog' =
-    view === 'backlog' && backlogDef == null ? 'edit' : view
+    view === 'backlog' && backlogDef == null ? (markdown ? 'preview' : 'edit') : view
   const backlogMode = effectiveView === 'backlog'
 
   // 目次（TOC）の情報源はモードで異なる。Preview は描画済み DOM（.pane-body 内）、
