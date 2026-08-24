@@ -81,6 +81,7 @@ function App(): JSX.Element {
   const openFolder = useWorkspaceStore((s) => s.openFolder)
   const openFolderByPath = useWorkspaceStore((s) => s.openFolderByPath)
   const refreshGitStatus = useWorkspaceStore((s) => s.refreshGitStatus)
+  const setWatchStatus = useWorkspaceStore((s) => s.setWatchStatus)
   const loadSettings = useSettingsStore((s) => s.load)
   // 検索ペインの表示状態。左ペインを Explorer と切り替える。
   const searchOpen = useSearchStore((s) => s.open)
@@ -220,6 +221,15 @@ function App(): JSX.Element {
     })
     return unsubscribe
   }, [refreshGitStatus])
+
+  // file watcher の稼働状態を購読する。監視停止（ファイル数の上限超過）は
+  // FileExplorer のバナーでユーザーに知らせる。
+  useEffect(() => {
+    const unsubscribe = window.api.onWatchStatus((status) => {
+      setWatchStatus(status)
+    })
+    return unsubscribe
+  }, [setWatchStatus])
 
   // 起動時にアプリ設定を読み込む（クイック操作のボタン定義など）。
   useEffect(() => {

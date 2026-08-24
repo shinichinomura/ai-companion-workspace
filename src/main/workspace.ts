@@ -10,6 +10,7 @@ import {
   type FsChange,
   type FsChangeKind,
   type FsEventBatch,
+  type WatchStatus,
   type OpenFolderByPathRequest,
   type OpenFolderResult,
   type ReadDirRequest,
@@ -69,14 +70,53 @@ const IGNORED_DIRS = new Set([
 // これらは編集対象ではなく監視する価値がないため、監視だけ止める（ツリー表示には残す）。
 let watchIgnoredDirs = new Set<string>(DEFAULT_WATCH_IGNORED_DIRS)
 
+// 全タブ合計で監視してよい対象数（ファイル + フォルダ）の上限。
+// macOS + chokidar(kqueue) では監視対象 1 つ = fd 1 つで、プロセスの fd 上限は約 1 万。
+// 除外リストはフォルダ名の網羅に限界がある（Unity の Library、独自キャッシュ等）ため、
+// 事前スキャンで対象数を数え、この予算を超えるフォルダは監視自体を諦めてターミナルを守る。
+const MAX_WATCHED_ENTRIES = 8000
+
 // 監視除外フォルダ名を更新し、開いている全タブの watcher を新しい設定で貼り直す。
 // 起動時（設定読み込み後）と、設定画面での保存時に呼ぶ。
 export async function applyWatchIgnoredDirs(dirs: string[]): Promise<void> {
   watchIgnoredDirs = new Set(dirs)
   // 稼働中の watcher があれば、同じ root で貼り直して新しい除外設定を反映する。
   // snapshot を取ってから回す（startWatching が watchByWcId を書き換えるため）。
+  // 逐次で回す: 並行に走らせると各タブが監視予算（MAX_WATCHED_ENTRIES）の残量を
+  // 互いの更新前の値で計算してしまい、合計が予算を超え得るため。
   const active = [...watchByWcId.values()].map((s) => ({ root: s.root, target: s.target }))
-  await Promise.all(active.map(({ root, target }) => startWatching(root, target)))
+  for (const { root, target } of active) {
+    await startWatching(root, target)
+  }
+}
+
+// root 配下の監視対象数（ファイル + フォルダ）を数える。watcher と同じ除外
+// （watchIgnoredDirs のフォルダ名一致）を適用する。budget を超えたらそれ以上は
+// 数えずに打ち切る（巨大フォルダでスキャン自体が長引かないように）。
+async function countWatchTargets(root: string, budget: number): Promise<number> {
+  let count = 0
+  const stack: string[] = [root]
+  while (stack.length > 0) {
+    const dir = stack.pop()!
+    let entries: Dirent[]
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true })
+    } catch {
+      // 読めないディレクトリ（権限など）は数えない。
+      continue
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (watchIgnoredDirs.has(entry.name)) continue
+        count++
+        stack.push(join(dir, entry.name))
+      } else if (entry.isFile()) {
+        count++
+      }
+      if (count > budget) return count
+    }
+  }
+  return count
 }
 
 // テキストとして開くファイルの上限サイズ（バイト）。これを超えるものは binary 扱い。
@@ -89,8 +129,10 @@ interface WatchState {
   root: string
   // 変更通知の送信先 renderer（このタブ）。
   target: WebContents
-  // 稼働中の file watcher。張り替え中・非開始時は null。
+  // 稼働中の file watcher。張り替え中・非開始時・上限超過で停止中は null。
   watcher: FSWatcher | null
+  // このタブが消費している監視対象数（事前スキャンの結果）。全タブ合計の予算管理に使う。
+  watchedCount: number
   // debounce 用バッファとタイマー（spec 2.2.5 の near real-time）。
   pending: FsChange[]
   flushTimer: NodeJS.Timeout | null
@@ -146,12 +188,46 @@ function enqueueChange(wcId: number, kind: FsChangeKind, absPath: string): void 
   }
 }
 
+// file watcher の稼働状態を該当タブの renderer に通知する（監視停止バナーの表示・解除用）。
+function sendWatchStatus(target: WebContents, status: WatchStatus): void {
+  if (!target.isDestroyed()) {
+    target.send(IpcChannel.WatchStatus, status)
+  }
+}
+
 // 指定タブの project root の監視を開始する。既存 watcher があれば閉じてから張り替える。
+// 監視対象数を事前に数え、全タブ合計の予算（MAX_WATCHED_ENTRIES）を超える場合は
+// 監視せずに renderer へ通知する（fd 枯渇でターミナルが起動できなくなる方が致命的なため）。
 async function startWatching(root: string, target: WebContents): Promise<void> {
   const wcId = target.id
   await stopWatching(wcId)
-  const state: WatchState = { root, target, watcher: null, pending: [], flushTimer: null }
+  const state: WatchState = {
+    root,
+    target,
+    watcher: null,
+    watchedCount: 0,
+    pending: [],
+    flushTimer: null
+  }
   watchByWcId.set(wcId, state)
+
+  // 他タブが消費している分を差し引いた、このタブに使える監視予算。
+  const used = [...watchByWcId.values()].reduce(
+    (sum, s) => (s === state ? sum : sum + s.watchedCount),
+    0
+  )
+  const budget = Math.max(0, MAX_WATCHED_ENTRIES - used)
+  const entryCount = await countWatchTargets(root, budget)
+  if (entryCount > budget) {
+    // 監視は諦める（ツリー・編集・ターミナルは通常どおり）。.git の監視は対象数が
+    // 小さく Git status の追従に必要なため続ける。renderer はバナーで停止を知らせる。
+    sendWatchStatus(target, { watching: false, entryCount, limit: budget })
+    await startGitWatching(root, target)
+    return
+  }
+  state.watchedCount = entryCount
+  sendWatchStatus(target, { watching: true, entryCount, limit: budget })
+
   state.watcher = chokidar.watch(root, {
     // 初期スキャンの add イベントは不要（ツリーは readDir で取得済み）。
     ignoreInitial: true,

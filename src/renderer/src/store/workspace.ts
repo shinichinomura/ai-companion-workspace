@@ -3,7 +3,8 @@ import type {
   FileNode,
   FsEventBatch,
   GitFileStatus,
-  OpenFolderResult
+  OpenFolderResult,
+  WatchStatus
 } from '../../../shared/ipc'
 
 // 開いているファイルの状態。
@@ -209,6 +210,11 @@ interface WorkspaceState {
   // ファイルの Git status。project root 相対パス → 状態。非リポジトリ・変更なしは空。
   gitStatuses: Record<string, GitFileStatus>
 
+  // file watcher の稼働状態。監視停止（ファイル数の上限超過）をバナーで知らせるために持つ。
+  // main がフォルダを開くたび（＝invoke の応答前）に push してくるため、applyOpenResult では
+  // リセットしない（リセットすると、先に届いた通知を後から消してしまう）。未受信は null。
+  watchStatus: WatchStatus | null
+
   // 操作。
   openFolder: () => Promise<void>
   // 最近開いた一覧を main から取得して反映する。
@@ -257,6 +263,8 @@ interface WorkspaceState {
   setShowOnlyChanged: (show: boolean) => void
   // Git status を main から取得し直してツリー表示に反映する。
   refreshGitStatus: () => Promise<void>
+  // file watcher の稼働状態を反映する（main からの push を App が購読して呼ぶ）。
+  setWatchStatus: (status: WatchStatus) => void
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
@@ -275,6 +283,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   showHidden: loadShowHidden(null),
   showOnlyChanged: loadShowOnlyChanged(null),
   gitStatuses: {},
+  watchStatus: null,
 
   // フォルダを開き、ルート直下を読み込む。
   openFolder: async () => {
@@ -633,5 +642,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       if (get().root !== rootAtRequest) return
       set({ gitStatuses: {} })
     }
+  },
+
+  // file watcher の稼働状態を反映する。監視停止時は FileExplorer がバナーを出す。
+  setWatchStatus: (status: WatchStatus) => {
+    set({ watchStatus: status })
   }
 }))

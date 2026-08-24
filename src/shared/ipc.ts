@@ -32,6 +32,9 @@ export const IpcChannel = {
   CopyPath: 'workspace:copy-path',
   // main → renderer への push。file watcher が検知した変更を通知する。
   FsEvent: 'workspace:fs-event',
+  // M→R push: file watcher の稼働状態。ファイル数が上限を超えて監視を停止した場合に
+  // watching=false で通知し、renderer はバナーで知らせる（fd 枯渇によるターミナル即死の防止）。
+  WatchStatus: 'workspace:watch-status',
   // R→M invoke: 現在の project root の Git status（追加/変更/削除）を取得する。
   GitStatus: 'workspace:git-status',
   // M→R push: .git（index/HEAD/refs）の変化を検知した。renderer は GitStatus を取り直す。
@@ -177,7 +180,17 @@ export const DEFAULT_WATCH_IGNORED_DIRS: string[] = [
   'vendor',
   'target',
   'out',
-  '.cache'
+  '.cache',
+  // Unity の生成物（Library だけで数万ファイルになる）。名前がやや一般的だが、
+  // 除外してもツリー表示・編集はでき、監視（自動更新）が止まるだけなので許容する。
+  'Library',
+  'Temp',
+  'Logs',
+  // .NET / MSBuild の中間生成物
+  'obj',
+  // Xcode / CocoaPods の生成物
+  'DerivedData',
+  'Pods'
 ]
 
 // クイック操作の初期値。main の正規化と renderer のフォールバックで共有する。
@@ -376,6 +389,19 @@ export interface FsEventBatch {
   changes: FsChange[]
 }
 
+// file watcher の稼働状態（WatchStatus チャンネルで push する）。
+// macOS では監視対象 1 つにつき fd を 1 つ使うため、監視対象がプロセスの fd 上限（約 1 万）に
+// 迫るとターミナル（forkpty）が起動できなくなる。これを防ぐため、監視対象数が上限を超える
+// フォルダでは監視を止め、renderer にはこの通知でバナーを出してもらう。
+export interface WatchStatus {
+  // このタブの project root を監視しているか。false = 対象数が上限を超えて停止した。
+  watching: boolean
+  // 事前スキャンで数えた監視対象数（ファイル + フォルダ）。上限超過時は打ち切った時点の数。
+  entryCount: number
+  // 監視対象数の上限（全タブ合計の予算から算出した、このタブに許された数）。
+  limit: number
+}
+
 // terminal:start のリクエスト。terminalId（タブ内でのターミナル識別子）と初期サイズを渡す。
 export interface TerminalStartRequest {
   id: string
@@ -479,6 +505,8 @@ export interface WorkspaceApi {
   copyPath: (req: CopyPathRequest) => Promise<string>
   // file watcher の変更通知を購読する。返り値は購読解除関数。
   onFsEvent: (cb: (batch: FsEventBatch) => void) => () => void
+  // file watcher の稼働状態（監視停止の通知）を購読する。返り値は購読解除関数。
+  onWatchStatus: (cb: (status: WatchStatus) => void) => () => void
   // 現在の project root の Git status を取得する。非リポジトリなら isRepo=false。
   getGitStatus: () => Promise<GitStatusResult>
   // .git の変化（commit / add / checkout 等）通知を購読する。返り値は購読解除関数。

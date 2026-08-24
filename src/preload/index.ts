@@ -28,6 +28,7 @@ import {
   type TerminalResizeRequest,
   type TerminalUnreadMessage,
   type TerminalStartRequest,
+  type WatchStatus,
   type WriteFileRequest,
   type WorkLayout,
   type WorkspaceApi
@@ -61,6 +62,11 @@ const api: WorkspaceApi = {
     ipcRenderer.on(IpcChannel.FsEvent, listener)
     // 購読解除関数を返す。
     return () => ipcRenderer.removeListener(IpcChannel.FsEvent, listener)
+  },
+  onWatchStatus: (cb: (status: WatchStatus) => void) => {
+    const listener = (_e: unknown, status: WatchStatus): void => cb(status)
+    ipcRenderer.on(IpcChannel.WatchStatus, listener)
+    return () => ipcRenderer.removeListener(IpcChannel.WatchStatus, listener)
   },
   getGitStatus: () => ipcRenderer.invoke(IpcChannel.GitStatus),
   onGitStatusChanged: (cb: () => void) => {

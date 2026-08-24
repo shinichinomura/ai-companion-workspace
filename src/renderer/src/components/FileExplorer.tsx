@@ -581,6 +581,7 @@ function FileExplorer(): JSX.Element {
   const bookmarks = useWorkspaceStore((s) => s.bookmarks)
   const addBookmark = useWorkspaceStore((s) => s.addBookmark)
   const removeBookmark = useWorkspaceStore((s) => s.removeBookmark)
+  const watchStatus = useWorkspaceStore((s) => s.watchStatus)
 
   // 右クリックメニューの状態（null = 非表示）と、リネーム編集中の relPath。
   const [menu, setMenu] = useState<MenuState | null>(null)
@@ -697,6 +698,15 @@ function FileExplorer(): JSX.Element {
             </div>
           )}
         </div>
+        {rootName && watchStatus && !watchStatus.watching && (
+          // 監視対象数が上限を超えてファイル監視を停止した（fd 枯渇によるターミナル即死の防止）。
+          // ツリーは自動更新されないことと、除外設定で回復できることを知らせる。
+          <div className="watch-stopped-banner">
+            ファイル数が多いため（{watchStatus.entryCount.toLocaleString()} 件超）、
+            このフォルダの自動更新を停止しました。ターミナル・編集は通常どおり使えます。
+            設定の「監視から除外するフォルダ」に生成物フォルダを追加すると再開できます。
+          </div>
+        )}
         <div className="pane-body tree">
           {rootNodes == null ? (
             <RecentFolders />

@@ -885,6 +885,17 @@ body {
   color: var(--fg);
 }
 
+/* ファイル監視停止（対象数の上限超過）の通知バナー。エクスプローラーのヘッダー直下に出す。 */
+.watch-stopped-banner {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #ffd479;
+  background: #4d3a10;
+  border-bottom: 1px solid var(--border);
+}
+
 /* 外部変更の衝突 / 削除通知バナー */
 .conflict-banner {
   flex: 0 0 auto;
