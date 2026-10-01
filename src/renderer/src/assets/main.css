@@ -269,6 +269,24 @@ body {
 
 .terminal-tab-label {
   white-space: nowrap;
+  /* 長い名前を付けてもタブ列を占領しないよう、一定幅で省略する（全体はツールチップで読める）。 */
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* タブ名のインライン編集欄。タブの高さに収め、確定前であることがわかる枠を付ける。 */
+.terminal-tab-rename {
+  width: 110px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
 }
 
 /* 操作待ち（ベルが鳴ったが未確認）マーク。番号の左に琥珀色の丸を置く。

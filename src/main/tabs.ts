@@ -253,7 +253,7 @@ function clearUnreadIfViewing(wcId: number): void {
 // だけ通知を抑制する。それ以外（別アプリタブ／別ウィンドウ／別アプリ／同じアプリタブの非アクティブな
 // 別ターミナル）は、アプリ自体がアクティブでも OS 通知を出す。クリックで発生元アプリタブ＋
 // 発生元ターミナルへ復帰できるようにする。
-function handleTerminalBell(wcId: number, terminalId: string, num: number): void {
+function handleTerminalBell(wcId: number, terminalId: string, label: string): void {
   if (!win || win.isDestroyed()) return
   const tab = tabs.find((t) => t.id === wcId)
   if (!tab) return
@@ -277,7 +277,7 @@ function handleTerminalBell(wcId: number, terminalId: string, num: number): void
   if (!Notification.isSupported()) return
   const notification = new Notification({
     title: tab.title,
-    body: `ターミナル ${num} が操作待ちです`,
+    body: `${label} が操作待ちです`,
     silent: false
   })
   // 通知クリックでウィンドウを前面に出し、該当アプリタブへ切り替え、さらにその中の
@@ -436,7 +436,7 @@ export function registerTabHandlers(): void {
   ipcMain.on(IpcChannel.TabClose, (_e, id: number) => closeTab(id))
   // 送信元タブ（e.sender.id）でベルが鳴った。今まさに見ているターミナル以外は OS 通知を出す。
   ipcMain.on(IpcChannel.TerminalBell, (e, msg: TerminalBellMessage) =>
-    handleTerminalBell(e.sender.id, msg.id, msg.num)
+    handleTerminalBell(e.sender.id, msg.id, msg.label)
   )
   // 各アプリタブが、現在アクティブなターミナル（サブタブ）の id を報告する。
   // 報告後、そのターミナルを今まさに見ているなら未確認の印を消す。

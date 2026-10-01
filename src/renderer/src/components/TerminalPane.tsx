@@ -15,9 +15,17 @@ interface TerminalPaneProps {
 }
 
 // タブ内の 1 ターミナル。id は PTY と対応する識別子、num は表示用の連番（閉じてもずれない）。
+// name はユーザーが付けた任意の名前。未設定なら連番を表示する。
+// ターミナル（PTY）自体がアプリ再起動で消えるセッション内の存在なので、名前も永続化しない。
 interface TermTab {
   id: string
   num: number
+  name?: string
+}
+
+// ベル通知などに出すターミナルの表示名。名前があればそれ、無ければ「ターミナル N」。
+function termLabel(t: TermTab): string {
+  return t.name ?? `ターミナル ${t.num}`
 }
 
 // claude の `@パス` 参照向けに、パス内の空白をバックスラッシュでエスケープする。
@@ -81,6 +89,26 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
   // 定型プロンプトのメニューを開いているか。
   const [promptMenuOpen, setPromptMenuOpen] = useState(false)
   const promptMenuRef = useRef<HTMLDivElement>(null)
+
+  // タブ名のインライン編集状態。id は編集中のタブ、value は入力中の文字列。
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null)
+  // blur と Enter/Escape が連続して発火しても二重確定しないよう、確定処理は ref の最新値で判定する。
+  const renamingRef = useRef(renaming)
+  renamingRef.current = renaming
+
+  // タブのダブルクリックで名前の編集を始める。現在の名前（未設定なら空欄）を初期値にする。
+  const startRename = (t: TermTab): void => {
+    setRenaming({ id: t.id, value: t.name ?? '' })
+  }
+
+  // 編集中の名前を確定する。空白だけなら名前を外して連番表示に戻す。
+  const commitRename = (): void => {
+    const r = renamingRef.current
+    if (!r) return
+    const name = r.value.trim()
+    setTabs((ts) => ts.map((t) => (t.id === r.id ? { ...t, name: name || undefined } : t)))
+    setRenaming(null)
+  }
 
   // 新しいターミナルを追加してアクティブにする。
   const addTerminal = (): void => {
@@ -206,7 +234,11 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
               role="tab"
               aria-selected={t.id === activeId}
               onClick={() => setActiveId(t.id)}
-              title={`ターミナル ${t.num}`}
+              onDoubleClick={() => {
+                // 編集中のタブをさらにダブルクリックしても入力をリセットしない。
+                if (renaming?.id !== t.id) startRename(t)
+              }}
+              title={`${termLabel(t)}（ダブルクリックで名前を変更）`}
             >
               {/* 未確認（ベルが鳴ったが未表示）のターミナルに琥珀色の印を出す。
                   通知を閉じても、このサブタブを開くまで残る。 */}
@@ -217,11 +249,38 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
                   title="操作待ちです"
                 />
               )}
-              <span className="terminal-tab-label">
-                {/* 終了済みのターミナルは印を付けて分かるようにする。 */}
-                {exited[t.id] ? '○ ' : ''}
-                {t.num}
-              </span>
+              {renaming?.id === t.id ? (
+                /* 名前のインライン編集欄。Enter で確定、Escape でキャンセル、フォーカスを外しても確定する。 */
+                <input
+                  className="terminal-tab-rename"
+                  value={renaming.value}
+                  autoFocus
+                  onFocus={(e) => e.currentTarget.select()}
+                  onChange={(e) => setRenaming({ id: t.id, value: e.target.value })}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => {
+                    // ターミナル側のショートカット等に食われないよう、編集中のキーはここで止める。
+                    e.stopPropagation()
+                    if (e.key === 'Enter') {
+                      commitRename()
+                      // 確定したらターミナル本体へフォーカスを返す。
+                      handlesRef.current.get(t.id)?.focus()
+                    } else if (e.key === 'Escape') {
+                      setRenaming(null)
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  aria-label="ターミナル名を編集"
+                  placeholder={`${t.num}`}
+                />
+              ) : (
+                <span className="terminal-tab-label">
+                  {/* 終了済みのターミナルは印を付けて分かるようにする。 */}
+                  {exited[t.id] ? '○ ' : ''}
+                  {t.name ?? t.num}
+                </span>
+              )}
               {tabs.length > 1 && (
                 <button
                   type="button"
@@ -365,7 +424,7 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
             <TerminalInstance
               key={t.id}
               id={t.id}
-              num={t.num}
+              label={termLabel(t)}
               active={t.id === activeId}
               collapsed={collapsed}
               setHandle={setHandle}

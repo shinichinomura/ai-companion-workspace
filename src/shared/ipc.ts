@@ -445,11 +445,12 @@ export interface TerminalExit {
   exitCode: number
 }
 
-// terminal:bell の送信。どのターミナルが鳴らしたか（id）と表示番号（num）を渡す。
-// num は OS 通知に「ターミナル N」と出して発生元を分かりやすくするために使う。
+// terminal:bell の送信。どのターミナルが鳴らしたか（id）と表示名（label）を渡す。
+// label は OS 通知に発生元を出すために使う。ユーザーが付けた名前があればそれ、
+// 無ければ「ターミナル N」の形（組み立ては renderer 側が行う）。
 export interface TerminalBellMessage {
   id: string
-  num: number
+  label: string
 }
 
 // terminal:activate の通知。クリックされたベル通知の発生元ターミナルを id で示す。

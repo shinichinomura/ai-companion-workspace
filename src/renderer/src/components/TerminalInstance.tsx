@@ -18,8 +18,8 @@ export interface TerminalHandle {
 interface TerminalInstanceProps {
   // タブ内でのターミナル識別子。main 側の PTY と 1:1 で対応する。
   id: string
-  // 表示用の連番。ベル通知に「ターミナル N」と出すために使う。
-  num: number
+  // ベル通知に出す表示名（ユーザーが付けた名前、無ければ「ターミナル N」）。
+  label: string
   // このターミナルが現在表示中（アクティブ）か。false の間は display:none で隠す。
   active: boolean
   // ターミナルペイン全体が折りたたまれているか。表示復帰時にサイズを測り直す。
@@ -34,7 +34,7 @@ interface TerminalInstanceProps {
 
 function TerminalInstance({
   id,
-  num,
+  label,
   active,
   collapsed,
   setHandle,
@@ -53,9 +53,9 @@ function TerminalInstance({
   setHandleRef.current = setHandle
   const onExitedRef = useRef(onExitedChange)
   onExitedRef.current = onExitedChange
-  // num は id ごとに不変だが、effect 依存を id だけに保つため ref 経由で参照する。
-  const numRef = useRef(num)
-  numRef.current = num
+  // label は名前変更で変わりうるが、effect 依存を id だけに保つため ref 経由で参照する。
+  const labelRef = useRef(label)
+  labelRef.current = label
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -106,7 +106,7 @@ function TerminalInstance({
     // ベル（\x07）を main に通知する。claude CLI が操作待ちになると鳴らすため、
     // アプリが非アクティブ／別タブのときに main 側で OS 通知を出す。
     const bellSub = term.onBell(() => {
-      window.api.notifyTerminalBell({ id, num: numRef.current })
+      window.api.notifyTerminalBell({ id, label: labelRef.current })
     })
 
     // PTY 出力 → xterm。自分宛て（id 一致）のみ書き込む。
