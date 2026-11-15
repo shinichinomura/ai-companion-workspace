@@ -1,12 +1,15 @@
 {
   "name": "claude-code-companion-workspace",
   "productName": "Noetelier",
-  "version": "0.0.41",
+  "version": "0.0.42",
   "description": "Claude Code を使ったローカルプロジェクト作業を支援する Mac 向けワークスペース",
   "main": "./out/main/index.js",
   "author": "Shinichi Nomura",
   "license": "MIT",
   "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "env -u ELECTRON_RUN_AS_NODE electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
@@ -16,17 +19,29 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "package:mac": "npm run build && electron-builder --mac --arm64",
+    "release:check": "node scripts/release-mac.mjs --check",
+    "release:mac": "node scripts/release-mac.mjs",
+    "probe:mas": "python3 scripts/probe-mas-sandbox.py",
+    "test:smoke": "npm run build && node scripts/smoke-electron.mjs",
     "trial:install": "npm run package:mac && rm -rf '/Applications/Noetelier.app' && cp -R 'dist/mac-arm64/Noetelier.app' /Applications/ && echo 'installed to /Applications/Noetelier.app'",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
   "build": {
     "appId": "com.nomura.noetelier",
     "productName": "Noetelier",
+    "files": [
+      "out/**/*",
+      "package.json",
+      "LICENSE",
+      "!**/.env",
+      "!**/.env.*"
+    ],
     "asarUnpack": [
       "node_modules/node-pty/**"
     ],
     "mac": {
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "category": "public.app-category.developer-tools"
     }
   },
   "dependencies": {
@@ -35,7 +50,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "chokidar": "^5.0.0",
-    "js-yaml": "^5.2.0",
+    "js-yaml": "^5.5.0",
     "monaco-editor": "^0.52.2",
     "node-pty": "^1.1.0",
     "rehype-raw": "^7.0.0",
@@ -50,14 +65,14 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.4",
+    "@electron/rebuild": "4.2.1",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^33.2.0",
-    "electron-builder": "^25.1.8",
+    "electron": "45.3.2",
+    "electron-builder": "26.18.0",
     "electron-vite": "^2.3.0",
     "playwright-core": "^1.61.1",
     "react": "^18.3.1",

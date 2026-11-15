@@ -27,6 +27,9 @@ Claude Code を使ったローカルプロジェクト作業を支援する **Ma
 - **State**: Zustand
 - **Packaging**: electron-builder（Developer ID 署名 + notarization、直接配布）
 
+公開準備と Mac App Store の検証結果は [docs/distribution.md](docs/distribution.md) を参照。
+GitHub Releases で無料配布する。統合ターミナルと Claude Code 連携を維持し、Developer ID 署名・Apple 公証付きの DMG を使用する。App Store には未掲載。
+
 ## アーキテクチャ原則
 
 - **Renderer に Node.js API を直接公開しない**。すべての fs 操作・PTY 操作は main process 経由（IPC）。
@@ -96,6 +99,10 @@ Claude Code を使ったローカルプロジェクト作業を支援する **Ma
 - `npm run dev` — electron-vite 開発サーバー（HMR）でアプリを起動（**開発用**）
 - `npm run trial:install` — パッケージして `/Applications` に上書きインストールする（**試用用**。Dock 登録した `.app` を更新するときはこれを実行）
 - `npm run package:mac` — macOS arm64 向けにパッケージングのみ（`dist/` に出力。インストールはしない）
+- `npm run release:check` — Developer ID 証明書と Keychain に保存した公証認証を確認
+- `npm run release:mac` — 署名・公証・Gatekeeper 検証付きの arm64 DMG を生成（一般公開先へのアップロードはしない）
+- `npm run probe:mas` — App Sandbox 内の PTY と外部 CLI アクセスの最小検証
+- `npm run test:smoke` — 分離したテスト環境でビルド後の画面・ファイル操作・PTY を確認
 - `npm run build` — typecheck + main/preload/renderer をビルド（`out/` に出力）
 - `npm run typecheck` — main(node) と renderer(web) の型チェック
 - `npm run start` — ビルド済み `out/` を Electron で起動（HMR なし。試用版 .app の手前の素早い確認用）

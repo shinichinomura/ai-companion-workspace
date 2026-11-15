@@ -7,6 +7,14 @@ dist/
 
 # 秘密情報（Gemini API キーなど）
 .env
+.env.*
+!.env.example
+
+# 署名・公証の秘密鍵とプロビジョニング情報
+*.p12
+*.p8
+*.provisionprofile
+*.mobileprovision
 
 # アイコン生成の中間物・探索用の大量画像（採用元のみ追跡する）
 build/icon.iconset/
