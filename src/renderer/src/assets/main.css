@@ -1242,6 +1242,14 @@ body {
   border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
   font-size: 12px;
+  /* 普段は本文の邪魔にならないよう薄くし、マウスオン／キーボードフォーカス時だけ通常表示に戻す。 */
+  opacity: 0.18;
+  transition: opacity 0.15s ease;
+}
+
+.toc-rail:hover,
+.toc-rail:focus-within {
+  opacity: 1;
 }
 
 .toc-list {
