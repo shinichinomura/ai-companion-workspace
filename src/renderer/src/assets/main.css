@@ -1222,7 +1222,7 @@ body {
    Edit / Preview どちらのモードでも同じ配置になる。 */
 .toc-float {
   position: absolute;
-  right: 16px;
+  right: 8px;
   bottom: 16px;
   /* ヘッダーや上端を越えないよう、ペイン高さから余白を引いた範囲に収める。 */
   max-height: calc(100% - 60px);
@@ -1242,13 +1242,52 @@ body {
   border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
   font-size: 12px;
-  /* 普段は本文の邪魔にならないよう薄くし、マウスオン／キーボードフォーカス時だけ通常表示に戻す。 */
-  opacity: 0.18;
-  transition: opacity 0.15s ease;
+  /* 普段は非表示（代わりに .toc-ticks を出す）。.toc-float のホバー／フォーカス時に展開する。 */
+  display: none;
 }
 
-.toc-rail:hover,
-.toc-rail:focus-within {
+.toc-float:hover .toc-rail,
+.toc-float:focus-within .toc-rail {
+  display: block;
+}
+
+/* 普段の目盛り表示。見出し 1 つにつき 1 本の横線を右寄せで縦に並べ、現在地だけ accent 色にする。
+   本文に被る面積を小さくするため幅は狭く、背景も付けない。ホバーの当たり判定として余白を持たせる。 */
+.toc-ticks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  max-height: 100%;
+  overflow: hidden;
+  padding: 8px 4px 8px 12px;
+  cursor: pointer;
+}
+
+.toc-float:hover .toc-ticks,
+.toc-float:focus-within .toc-ticks {
+  display: none;
+}
+
+.toc-tick {
+  flex: none;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--fg-dim);
+  opacity: 0.4;
+}
+.toc-tick-1 {
+  width: 18px;
+}
+.toc-tick-2 {
+  width: 12px;
+}
+.toc-tick-3 {
+  width: 8px;
+}
+
+.toc-tick.active {
+  background: var(--accent);
   opacity: 1;
 }
 
