@@ -1,7 +1,7 @@
 {
   "name": "claude-code-companion-workspace",
   "productName": "Noetelier",
-  "version": "0.0.48",
+  "version": "0.0.49",
   "description": "Claude Code を使ったローカルプロジェクト作業を支援する Mac 向けワークスペース",
   "main": "./out/main/index.js",
   "author": "Shinichi Nomura",
@@ -42,6 +42,11 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "shinichinomura",
+      "repo": "ai-companion-workspace"
     }
   },
   "dependencies": {
@@ -50,6 +55,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "chokidar": "^5.0.0",
+    "electron-updater": "^6.8.11",
     "js-yaml": "^5.5.0",
     "monaco-editor": "^0.52.2",
     "node-pty": "^1.1.0",

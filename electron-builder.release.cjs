@@ -13,7 +13,11 @@ module.exports = {
   artifactName: '${productName}-${version}-${arch}.${ext}',
   mac: {
     ...build.mac,
-    target: [{ target: 'dmg', arch: ['arm64'] }],
+    // dmg は初回インストール用、zip は自動更新（electron-updater / Squirrel.Mac）用。
+    target: [
+      { target: 'dmg', arch: ['arm64'] },
+      { target: 'zip', arch: ['arm64'] }
+    ],
     identity: process.env.NOETELIER_RELEASE_IDENTITY,
     hardenedRuntime: true,
     entitlements: 'build/entitlements.release.plist',

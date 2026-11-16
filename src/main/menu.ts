@@ -10,6 +10,7 @@ import {
   activateRelativeTab
 } from './tabs'
 import { loadRecentFolders } from './settings'
+import { checkForUpdates } from './updater'
 
 // 「最近使ったフォルダ」メニューに表示する最大件数。
 const RECENT_MENU_LIMIT = 5
@@ -118,6 +119,10 @@ export function buildAppMenu(): void {
             label: app.name,
             submenu: [
               { role: 'about' as const },
+              {
+                label: 'アップデートを確認…',
+                click: () => void checkForUpdates(true)
+              },
               { type: 'separator' as const },
               {
                 label: '設定…',

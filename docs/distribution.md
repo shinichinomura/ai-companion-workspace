@@ -56,7 +56,11 @@ npm run release:mac
 
 release:mac は、型チェックとビルド、分離したテスト環境での動作確認、Developer ID 署名、アプリの公証、署名・公証チケット・Gatekeeper 検証、署名済みアプリでの動作確認を実行する。その後、DMG を公証し、Accepted を確認してチケットを添付し、Gatekeeper 検証と SHA-256 ファイルの生成を行う。
 
-成果物は dist/release/Noetelier-<version>-arm64.dmg と同名の .sha256。公開先へのアップロードは自動実行しない。失敗時には途中の生成物が残るため、処理全体の成功を確認するまで配布しない。
+成果物は dist/release/ の次の 5 点。公開先へのアップロードは自動実行しない。
+
+- Noetelier-<version>-arm64.dmg と同名の .sha256（初回インストール用）
+- Noetelier-<version>-arm64.zip と .zip.blockmap（アプリ内の自動更新用。公証・ステープル済みのアプリを格納）
+- latest-mac.yml（自動更新が参照する版情報。DMG の項目は公証後の実物に合わせて書き換える）失敗時には途中の生成物が残るため、処理全体の成功を確認するまで配布しない。
 
 配布ファイルは out/、package.json、LICENSE、electron-builder が収集する本番依存に限定する。DMG にも LICENSE を同梱する。通常の package:mac と trial:install はローカル試用用であり、公開用の署名・公証を保証しない。
 
@@ -67,6 +71,19 @@ NOETELIER_SMOKE_EXECUTABLE="$PWD/dist/release/mac-arm64/Noetelier.app/Contents/M
 ```
 
 自動テストは Claude Code の認証情報を読まず、CLI の実操作も行わない。新規ユーザーの Mac での初回起動、CLI の導入・認証、実際のプロジェクトでの利用は別途確認する。
+
+## アプリ内の更新
+
+アプリメニューの「アップデートを確認…」と、起動 10 秒後・6 時間ごとの静かなチェックで、GitHub Releases の最新版を確認する（electron-updater、更新元は package.json の build.publish）。新版があればダイアログで「ダウンロード」を選び、完了後に「再起動して更新」で適用する。自動ダウンロード・自動インストールはしない。実装は src/main/updater.ts。
+
+- **リリース手順**: package.json の version を上げて release:mac を実行し、5 点すべてを同じリリースに添付する。zip・blockmap・latest-mac.yml が欠けると更新できない。
+  ```sh
+  gh release create v<version> dist/release/Noetelier-<version>-arm64.{dmg,dmg.sha256,zip,zip.blockmap} dist/release/latest-mac.yml --title "Noetelier <version>" --notes "<変更点>"
+  ```
+- **署名が前提**: macOS の更新は新旧とも Developer ID 署名が必要。署名なしの試用版（trial:install）や開発起動では更新を適用できない（開発起動ではチェック自体を無効にしている。試用版は確認とダウンロードの途中でエラーになる）。
+- **初回だけ手動**: 更新機能を含まない版（0.0.48 以前）からは自動更新できない。更新機能を含む最初の版は DMG で入れ直す。
+- **未保存の編集**: アプリに終了時の未保存ガードは無いため、更新ダイアログで保存してから再起動するよう案内している。
+- 更新の動作確認には、版の異なる署名・公証済みビルドを 2 つ公開して旧版から更新する実機確認が必要。この環境では未実施。
 
 ## Mac App Store の検討事項
 

@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { createReadStream, readFileSync, writeFileSync } from 'node:fs'
+import { createReadStream, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import * as yaml from 'js-yaml'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
@@ -24,6 +25,21 @@ function run(command, args, { capture = false, env = process.env } = {}) {
     throw new Error(`${command} が失敗しました (exit ${result.status ?? result.signal})。`)
   }
   return result.stdout ?? ''
+}
+
+// ステープル後の DMG の sha512 / size を latest-mac.yml に反映する。
+async function refreshUpdateManifest(dmgPath, dmgFileName) {
+  const manifestPath = join(root, 'dist/release/latest-mac.yml')
+  const manifest = yaml.load(readFileSync(manifestPath, 'utf8'))
+  const sha512 = createHash('sha512')
+  for await (const chunk of createReadStream(dmgPath)) sha512.update(chunk)
+  const digest = sha512.digest('base64')
+  const size = statSync(dmgPath).size
+  for (const file of manifest.files ?? []) {
+    if (file.url === dmgFileName) Object.assign(file, { sha512: digest, size })
+  }
+  if (manifest.path === dmgFileName) manifest.sha512 = digest
+  writeFileSync(manifestPath, yaml.dump(manifest, { lineWidth: -1 }))
 }
 
 async function main() {
@@ -82,7 +98,15 @@ async function main() {
   const hash = createHash('sha256')
   for await (const chunk of createReadStream(dmg)) hash.update(chunk)
   writeFileSync(`${dmg}.sha256`, `${hash.digest('hex')}  ${dmgName}\n`)
-  console.log(`署名・公証済みの配布物: ${dmg}\n公開先へのアップロードはまだ行っていません。`)
+
+  // ステープルで DMG の中身が変わったため、自動更新用の latest-mac.yml の DMG エントリを実物に合わせる。
+  // （更新本体は zip を使うが、ずれた記述を公開しないようにする。）
+  await refreshUpdateManifest(dmg, dmgName)
+
+  const releaseDir = join(root, 'dist/release')
+  const assets = [dmgName, `${dmgName}.sha256`, `${pkg.productName}-${pkg.version}-arm64.zip`, `${pkg.productName}-${pkg.version}-arm64.zip.blockmap`, 'latest-mac.yml']
+  console.log(`署名・公証済みの配布物（${releaseDir}）:\n${assets.map((a) => `  ${a}`).join('\n')}`)
+  console.log('自動更新には zip・blockmap・latest-mac.yml も同じリリースに添付する必要があります。\n公開先へのアップロードはまだ行っていません。')
 }
 
 main().catch((error) => {

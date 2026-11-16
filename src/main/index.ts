@@ -17,6 +17,7 @@ import {
   setWatchIgnoredChangeListener
 } from './app-settings'
 import { buildAppMenu, refreshRecentMenu, registerMenuHandlers } from './menu'
+import { initUpdater } from './updater'
 import { createMainWindow, registerTabHandlers, getActiveTabRoot } from './tabs'
 import { MEDIA_SCHEME } from '../shared/ipc'
 import { APP_GIT_HASH, buildDetail } from '../shared/build-info'
@@ -95,6 +96,9 @@ app.whenReady().then(async () => {
 
   // メインウィンドウ（クロームシェル + 初期タブ）を生成する。
   createMainWindow()
+
+  // アプリ自身の更新確認（パッケージ版のみ有効。起動後しばらくして静かにチェックする）。
+  initUpdater()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
