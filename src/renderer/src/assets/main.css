@@ -2051,3 +2051,91 @@ body {
   color: var(--fg);
   background: #333;
 }
+
+/* ---- エディタの複数ペイン（分割） ---- */
+
+/* エディタ領域のグループは親 Panel を埋める。 */
+.editor-group {
+  height: 100%;
+}
+
+/* ヘッダー右端の操作ボタン群（分割 / 閉じる）。 */
+.pane-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pane-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--fg-dim);
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.pane-action-btn:hover:not(:disabled) {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.pane-action-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 2 枚以上のときだけ、いま操作中のペインをヘッダー下線で示す。 */
+.pane-inner.multi .pane-header {
+  border-bottom: 2px solid transparent;
+}
+
+.pane-inner.active-pane .pane-header {
+  border-bottom-color: var(--accent);
+  color: var(--fg);
+}
+
+/* 狭いペイン（分割時）でもヘッダーが崩れないようにする。
+   ファイル名だけが縮んで省略表示になり、ボタン類は折り返さず・縮まない。 */
+.pane-header {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.pane-header > * {
+  flex-shrink: 0;
+}
+
+.pane-header > .pane-title {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.pane-title {
+  display: flex;
+  align-items: center;
+}
+
+.pane-title-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.pane-title .dirty-indicator {
+  flex: 0 0 auto;
+  white-space: pre;
+}
+
+/* 分割時はヘッダー内の余白を詰める。 */
+.pane-inner.multi .pane-header {
+  padding: 0 6px;
+}

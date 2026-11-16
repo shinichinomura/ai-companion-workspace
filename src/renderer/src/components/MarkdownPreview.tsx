@@ -5,9 +5,15 @@ import { renderMarkdown, resolveLinkPath } from './markdown'
 // Markdown のレンダリング済みプレビュー。
 // content は編集中の最新内容を受け取り、サニタイズ済み HTML として表示する。
 // 目次（TOC）は EditorPane がペイン全体にフローティング表示するため、ここでは扱わない。
-function MarkdownPreview({ content }: { content: string }): JSX.Element {
+function MarkdownPreview({
+  content,
+  relPath: activeRelPath
+}: {
+  content: string
+  // 表示中のファイルの relPath。相対リンク・相対パス画像の解決起点になる。
+  relPath: string
+}): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
-  const activeRelPath = useWorkspaceStore((s) => s.activeFile?.relPath ?? '')
   const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
 
   // 変換コストを抑えるため content / 表示中ファイルが変わったときだけ再変換する。

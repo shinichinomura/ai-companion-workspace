@@ -21,15 +21,24 @@ function matchesQuery(item: KanbanItem, query: string): boolean {
 
 // カンバンのカード 1 枚。一覧性を重視し、タイトル・状態の括弧補足・タグだけを載せる
 // （概要はホバーのツールチップ、関連リンクは詳細ファイル側で見る）。
-function KanbanCard({ item, openRelPath }: { item: KanbanItem; openRelPath: string }): JSX.Element {
+function KanbanCard({
+  item,
+  openRelPath,
+  paneId
+}: {
+  item: KanbanItem
+  openRelPath: string
+  // このビューを表示しているエディタペイン。索引行ジャンプの対象になる。
+  paneId: string
+}): JSX.Element {
   const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
   const openFileAtLocation = useWorkspaceStore((s) => s.openFileAtLocation)
-  const revealActiveFileAt = useWorkspaceStore((s) => s.revealActiveFileAt)
+  const revealAt = useWorkspaceStore((s) => s.revealAt)
 
   // 索引行そのものへジャンプする。開いている索引ならディスク再読込を避けて reveal だけ積む
   // （openFileAtLocation は読み直すため、未保存の編集があると失われる）。
   const jumpToIndexRow = (): void => {
-    if (item.sourceRelPath === openRelPath) revealActiveFileAt(item.line)
+    if (item.sourceRelPath === openRelPath) revealAt(paneId, item.line)
     else void openFileAtLocation(item.sourceRelPath, item.line, 1, 0)
   }
 
@@ -76,10 +85,13 @@ function KanbanCard({ item, openRelPath }: { item: KanbanItem; openRelPath: stri
 function BacklogView({
   def,
   openRelPath,
+  paneId,
   content
 }: {
   def: BacklogDef
   openRelPath: string
+  // このビューを表示しているエディタペイン。
+  paneId: string
   content: string
 }): JSX.Element {
   const indexContents = useBacklogStore((s) => s.indexContents)
@@ -269,6 +281,7 @@ function BacklogView({
                         key={`${item.sourceRelPath}:${item.line}:${i}`}
                         item={item}
                         openRelPath={openRelPath}
+                        paneId={paneId}
                       />
                     ))}
                   </div>

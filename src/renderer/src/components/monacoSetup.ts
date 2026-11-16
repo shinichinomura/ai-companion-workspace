@@ -30,6 +30,15 @@ self.MonacoEnvironment = {
   }
 }
 
+// Monaco はエディタを破棄するとき、保留中の非同期処理を name/message とも 'Canceled' の例外で reject する。
+// 通常の VS Code では内部で握りつぶされるが、スタンドアロン版では未処理 rejection として表面化する。
+// エディタペインの分割・クローズや Edit/Preview の切替でエディタを何度も破棄するため、
+// これは正常なキャンセルとして無視する（他のエラーはそのまま報告される）。
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason as { name?: string; message?: string } | null
+  if (reason?.name === 'Canceled' && reason.message === 'Canceled') event.preventDefault()
+})
+
 // 拡張子から Monaco の language ID を判定する。不明な場合は plaintext。
 export function languageFromPath(relPath: string): string {
   const name = relPath.toLowerCase()

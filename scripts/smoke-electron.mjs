@@ -79,6 +79,34 @@ try {
   await renderer.getByText('README.md', { exact: true }).first().click()
   await renderer.getByRole('heading', { name: 'Noetelier smoke test', exact: true }).waitFor()
 
+  // エディタの複数ペイン: 基本は 1 枚。分割して同じファイルを Edit / Preview で並べ、
+  // 片方の編集がもう片方に反映されること、ペインを閉じても編集内容が失われないことを確認する。
+  const panes = renderer.locator('.editor-group .pane-inner')
+  assert.equal(await panes.count(), 1)
+  assert.equal(await renderer.getByRole('button', { name: 'エディタを閉じる' }).count(), 0)
+  await renderer.getByRole('button', { name: 'エディタを横に分割' }).click()
+  await waitFor(async () => (await panes.count()) === 2, 'エディタの分割')
+  await panes.nth(1).getByRole('heading', { name: 'Noetelier smoke test', exact: true }).waitFor()
+  await panes.nth(1).getByRole('button', { name: 'Edit', exact: true }).click()
+  const monacoEditor = panes.nth(1).locator('.monaco-container')
+  await monacoEditor.click()
+  await renderer.keyboard.press('ControlOrMeta+a')
+  await renderer.keyboard.type('# Edited in split\n')
+  await panes.nth(0).getByRole('heading', { name: 'Edited in split', exact: true }).waitFor()
+  assert.equal(await renderer.locator('.dirty-indicator').count(), 2)
+  // 同じファイルを他のペインが表示している間は、確認ダイアログなしで閉じられ、編集内容は残る。
+  await panes.nth(1).getByRole('button', { name: 'エディタを閉じる' }).click()
+  await waitFor(async () => (await panes.count()) === 1, 'エディタのペインを閉じる')
+  await panes.nth(0).getByRole('heading', { name: 'Edited in split', exact: true }).waitFor()
+  assert.equal(await renderer.locator('.dirty-indicator').count(), 1)
+  // ⌥クリックで別ファイルを横に開く（元のペインはそのまま）。
+  await renderer.getByText('data.csv', { exact: true }).first().click({ modifiers: ['Alt'] })
+  await waitFor(async () => (await panes.count()) === 2, 'エクスプローラーから横に開く')
+  await panes.nth(0).getByRole('heading', { name: 'Edited in split', exact: true }).waitFor()
+  await panes.nth(1).locator('.pane-header').getByText('data.csv').waitFor()
+  await panes.nth(1).getByRole('button', { name: 'エディタを閉じる' }).click()
+  await waitFor(async () => (await panes.count()) === 1, '横に開いたペインを閉じる')
+
   await evaluate('window.__smokeChanges = []; window.api.onFsEvent(batch => window.__smokeChanges.push(...batch.changes)); void 0;')
   await writeFile(join(project, 'external.txt'), 'External update.\n')
   await waitFor(() => evaluate('window.__smokeChanges.some(change => change.relPath === "external.txt")'), '外部変更通知')

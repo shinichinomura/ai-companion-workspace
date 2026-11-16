@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useWorkspaceStore } from '../store/workspace'
+import { useWorkspaceStore, selectActiveFile } from '../store/workspace'
 import { useSettingsStore } from '../store/settings'
 import { useTerminalBridge } from '../store/terminalBridge'
 import type { WorkLayout } from '../../../shared/ipc'
@@ -45,7 +45,7 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
   // 再マウントされる（rootKey による key 付け）ため、初期状態（ターミナル 1 つ）から作り直る。
   const root = useWorkspaceStore((s) => s.root)
   // 現在ビューワー/エディタで開いているファイル。null なら「@ で渡す」ボタンは無効。
-  const activeFile = useWorkspaceStore((s) => s.activeFile)
+  const activeFile = useWorkspaceStore(selectActiveFile)
   // よく使う Git 操作のボタン定義（設定画面で編集可能）。押すとアクティブな統合ターミナルへ prompt を送る。
   // 送信先はユーザーが見ている統合ターミナル。Claude が対話モードで起動している前提の
   // ショートカットで、裏でプロンプトを投入するものではない（spec 設計原則）。

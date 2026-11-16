@@ -3,7 +3,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import type { ImperativePanelHandle } from 'react-resizable-panels'
 import FileExplorer from './components/FileExplorer'
 import SearchPane from './components/SearchPane'
-import EditorPane from './components/EditorPane'
+import EditorArea from './components/EditorArea'
 import TerminalPane from './components/TerminalPane'
 import SettingsModal from './components/SettingsModal'
 import { useWorkspaceStore } from './store/workspace'
@@ -292,7 +292,7 @@ function App(): JSX.Element {
             <div className="work-area" ref={workRef}>
               <PanelGroup direction={layout} autoSaveId={`work-layout:${rootKey}`} className="work-group">
                 <Panel defaultSize={60} minSize={20} className="pane">
-                  <EditorPane />
+                  <EditorArea />
                 </Panel>
                 <PanelResizeHandle className="resize-handle" />
                 {/* collapsible にしてサイズを縮めるだけ。中身（PTY）はマウントしたまま保持する。 */}

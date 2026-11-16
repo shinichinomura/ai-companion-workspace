@@ -9,7 +9,7 @@ import {
   useState
 } from 'react'
 import type { FileNode, GitFileStatus } from '../../../shared/ipc'
-import { useWorkspaceStore } from '../store/workspace'
+import { useWorkspaceStore, selectActiveFile } from '../store/workspace'
 import { useTerminalBridge } from '../store/terminalBridge'
 
 // 右クリックで開いたコンテキストメニューの状態。
@@ -179,7 +179,7 @@ function RenameInput({
 function TreeNode({ node, depth, statuses, changedDirs }: TreeProps): JSX.Element {
   const expandedDirs = useWorkspaceStore((s) => s.expandedDirs)
   const childrenByDir = useWorkspaceStore((s) => s.childrenByDir)
-  const activeFile = useWorkspaceStore((s) => s.activeFile)
+  const activeFile = useWorkspaceStore(selectActiveFile)
   const showHidden = useWorkspaceStore((s) => s.showHidden)
   const toggleDir = useWorkspaceStore((s) => s.toggleDir)
   const openFile = useWorkspaceStore((s) => s.openFile)
@@ -207,12 +207,13 @@ function TreeNode({ node, depth, statuses, changedDirs }: TreeProps): JSX.Elemen
       ? ' git-dir-changed'
       : ''
 
-  const handleClick = (): void => {
+  // ⌥ を押しながらクリックすると、エディタを横に分割して開く。
+  const handleClick = (e: React.MouseEvent): void => {
     if (isDeleted) return
     if (node.isDirectory) {
       void toggleDir(node.relPath)
     } else {
-      void openFile(node)
+      void openFile(node, { side: e.altKey })
     }
   }
 
@@ -292,7 +293,7 @@ function buildChangedEntries(statuses: Record<string, GitFileStatus>): ChangedEn
 
 // 「変更ファイルのみ表示」モードの 1 行。ツリーと違い階層を持たず、ファイル名 + 所属ディレクトリを並べる。
 function ChangedFileRow({ entry }: { entry: ChangedEntry }): JSX.Element {
-  const activeFile = useWorkspaceStore((s) => s.activeFile)
+  const activeFile = useWorkspaceStore(selectActiveFile)
   const openFile = useWorkspaceStore((s) => s.openFile)
   const { openMenu, renamingPath, menuTargetPath, commitRename, cancelRename } = useExplorer()
 
@@ -304,9 +305,9 @@ function ChangedFileRow({ entry }: { entry: ChangedEntry }): JSX.Element {
   const isRenaming = renamingPath === relPath
   const isMenuTarget = menuTargetPath === relPath
 
-  const handleClick = (): void => {
+  const handleClick = (e: React.MouseEvent): void => {
     if (isDeleted) return
-    void openFile(node)
+    void openFile(node, { side: e.altKey })
   }
 
   const handleContextMenu = (e: React.MouseEvent): void => {
@@ -464,7 +465,7 @@ const BOOKMARKS_COLLAPSED_KEY = 'bookmarks-collapsed'
 // 行の見た目・折りたたみ挙動は「最近開いたファイル」と共通で、右クリックで解除などの操作ができる。
 function Bookmarks(): JSX.Element | null {
   const bookmarks = useWorkspaceStore((s) => s.bookmarks)
-  const activeFile = useWorkspaceStore((s) => s.activeFile)
+  const activeFile = useWorkspaceStore(selectActiveFile)
   const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
   const { openMenu, menuTargetPath } = useExplorer()
   const [collapsed, setCollapsed] = useState(
@@ -499,7 +500,7 @@ function Bookmarks(): JSX.Element | null {
               key={relPath}
               className={`recent-file-row${isActive ? ' active' : ''}${isMenuTarget ? ' menu-target' : ''}`}
               title={relPath}
-              onClick={() => void openFileByRelPath(relPath)}
+              onClick={(e) => void openFileByRelPath(relPath, { side: e.altKey })}
               onContextMenu={(e) => {
                 e.preventDefault()
                 openMenu({ relPath, name, isDirectory: false }, e.clientX, e.clientY)
@@ -523,7 +524,7 @@ const RECENT_FILES_COLLAPSED_KEY = 'recent-files-collapsed'
 // 現在の root 内で最近エディタに開いたファイルを新しい順に並べる。空のときは何も表示しない。
 function RecentFiles(): JSX.Element | null {
   const recentFiles = useWorkspaceStore((s) => s.recentFiles)
-  const activeFile = useWorkspaceStore((s) => s.activeFile)
+  const activeFile = useWorkspaceStore(selectActiveFile)
   const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(RECENT_FILES_COLLAPSED_KEY) === 'true'
@@ -556,7 +557,7 @@ function RecentFiles(): JSX.Element | null {
               key={relPath}
               className={`recent-file-row${isActive ? ' active' : ''}`}
               title={relPath}
-              onClick={() => void openFileByRelPath(relPath)}
+              onClick={(e) => void openFileByRelPath(relPath, { side: e.altKey })}
             >
               <span className="tree-icon">📄</span>
               <span className="recent-file-name">{name}</span>
@@ -581,6 +582,7 @@ function FileExplorer(): JSX.Element {
   const bookmarks = useWorkspaceStore((s) => s.bookmarks)
   const addBookmark = useWorkspaceStore((s) => s.addBookmark)
   const removeBookmark = useWorkspaceStore((s) => s.removeBookmark)
+  const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
   const watchStatus = useWorkspaceStore((s) => s.watchStatus)
 
   // 右クリックメニューの状態（null = 非表示）と、リネーム編集中の relPath。
@@ -633,6 +635,13 @@ function FileExplorer(): JSX.Element {
         onSelect: () => insertMention?.(relPath, isDirectory)
       }
     ]
+    // ファイルのみ対象。エディタを横に分割して開く（⌥クリックでも可）。
+    if (!isDirectory) {
+      items.push({
+        label: 'エディタを横に分割して開く',
+        onSelect: () => void openFileByRelPath(relPath, { side: true })
+      })
+    }
     // ブックマークはファイルのみ対象。登録済みなら解除、未登録なら追加のトグルにする。
     if (!isDirectory) {
       items.push(
@@ -648,7 +657,7 @@ function FileExplorer(): JSX.Element {
       { label: 'パスをコピー', onSelect: () => void window.api.copyPath({ relPath }) }
     )
     return items
-  }, [menu, insertMention, bookmarks, addBookmark, removeBookmark])
+  }, [menu, insertMention, bookmarks, addBookmark, removeBookmark, openFileByRelPath])
 
   // 変更を含むフォルダ集合は statuses が変わったときだけ作り直す。
   const changedDirs = useMemo(() => computeChangedDirs(gitStatuses), [gitStatuses])
