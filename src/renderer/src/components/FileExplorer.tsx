@@ -526,6 +526,7 @@ function RecentFiles(): JSX.Element | null {
   const recentFiles = useWorkspaceStore((s) => s.recentFiles)
   const activeFile = useWorkspaceStore(selectActiveFile)
   const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
+  const { openMenu, menuTargetPath } = useExplorer()
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem(RECENT_FILES_COLLAPSED_KEY) === 'true'
   )
@@ -552,12 +553,17 @@ function RecentFiles(): JSX.Element | null {
           const name = baseName(relPath)
           const dir = parentDir(relPath)
           const isActive = activeFile?.relPath === relPath
+          const isMenuTarget = menuTargetPath === relPath
           return (
             <div
               key={relPath}
-              className={`recent-file-row${isActive ? ' active' : ''}`}
+              className={`recent-file-row${isActive ? ' active' : ''}${isMenuTarget ? ' menu-target' : ''}`}
               title={relPath}
               onClick={(e) => void openFileByRelPath(relPath, { newTab: e.altKey })}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                openMenu({ relPath, name, isDirectory: false }, e.clientX, e.clientY)
+              }}
             >
               <span className="tree-icon">📄</span>
               <span className="recent-file-name">{name}</span>
