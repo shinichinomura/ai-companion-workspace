@@ -24,12 +24,12 @@ function matchesQuery(item: KanbanItem, query: string): boolean {
 function KanbanCard({
   item,
   openRelPath,
-  paneId
+  tabId
 }: {
   item: KanbanItem
   openRelPath: string
   // このビューを表示しているエディタペイン。索引行ジャンプの対象になる。
-  paneId: string
+  tabId: string
 }): JSX.Element {
   const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
   const openFileAtLocation = useWorkspaceStore((s) => s.openFileAtLocation)
@@ -38,7 +38,7 @@ function KanbanCard({
   // 索引行そのものへジャンプする。開いている索引ならディスク再読込を避けて reveal だけ積む
   // （openFileAtLocation は読み直すため、未保存の編集があると失われる）。
   const jumpToIndexRow = (): void => {
-    if (item.sourceRelPath === openRelPath) revealAt(paneId, item.line)
+    if (item.sourceRelPath === openRelPath) revealAt(tabId, item.line)
     else void openFileAtLocation(item.sourceRelPath, item.line, 1, 0)
   }
 
@@ -85,13 +85,13 @@ function KanbanCard({
 function BacklogView({
   def,
   openRelPath,
-  paneId,
+  tabId,
   content
 }: {
   def: BacklogDef
   openRelPath: string
   // このビューを表示しているエディタペイン。
-  paneId: string
+  tabId: string
   content: string
 }): JSX.Element {
   const indexContents = useBacklogStore((s) => s.indexContents)
@@ -281,7 +281,7 @@ function BacklogView({
                         key={`${item.sourceRelPath}:${item.line}:${i}`}
                         item={item}
                         openRelPath={openRelPath}
-                        paneId={paneId}
+                        tabId={tabId}
                       />
                     ))}
                   </div>

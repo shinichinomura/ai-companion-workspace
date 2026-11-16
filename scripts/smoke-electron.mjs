@@ -79,33 +79,35 @@ try {
   await renderer.getByText('README.md', { exact: true }).first().click()
   await renderer.getByRole('heading', { name: 'Noetelier smoke test', exact: true }).waitFor()
 
-  // エディタの複数ペイン: 基本は 1 枚。分割して同じファイルを Edit / Preview で並べ、
-  // 片方の編集がもう片方に反映されること、ペインを閉じても編集内容が失われないことを確認する。
-  const panes = renderer.locator('.editor-group .pane-inner')
-  assert.equal(await panes.count(), 1)
-  assert.equal(await renderer.getByRole('button', { name: 'エディタを閉じる' }).count(), 0)
-  await renderer.getByRole('button', { name: 'エディタを横に分割' }).click()
-  await waitFor(async () => (await panes.count()) === 2, 'エディタの分割')
-  await panes.nth(1).getByRole('heading', { name: 'Noetelier smoke test', exact: true }).waitFor()
-  await panes.nth(1).getByRole('button', { name: 'Edit', exact: true }).click()
-  const monacoEditor = panes.nth(1).locator('.monaco-container')
-  await monacoEditor.click()
+  // エディタのタブ: 基本は 1 枚（タブバーなし）。⌥クリックで別ファイルを新しいタブに開き、
+  // 切り替えても編集内容・表示モードが保たれること、重複タブを作らないことを確認する。
+  const tabs = renderer.locator('.editor-tabs .editor-tab')
+  const visibleBody = renderer.locator('.editor-tab-body.active')
+  assert.equal(await renderer.locator('.editor-tabs').count(), 0)
+  // README を Edit にして編集する（未保存の変更を作る）。
+  await renderer.locator('.pane-header').getByRole('button', { name: 'Edit', exact: true }).click()
+  await renderer.locator('.monaco-container').click()
   await renderer.keyboard.press('ControlOrMeta+a')
-  await renderer.keyboard.type('# Edited in split\n')
-  await panes.nth(0).getByRole('heading', { name: 'Edited in split', exact: true }).waitFor()
-  assert.equal(await renderer.locator('.dirty-indicator').count(), 2)
-  // 同じファイルを他のペインが表示している間は、確認ダイアログなしで閉じられ、編集内容は残る。
-  await panes.nth(1).getByRole('button', { name: 'エディタを閉じる' }).click()
-  await waitFor(async () => (await panes.count()) === 1, 'エディタのペインを閉じる')
-  await panes.nth(0).getByRole('heading', { name: 'Edited in split', exact: true }).waitFor()
+  await renderer.keyboard.type('# Edited in tab\n')
   assert.equal(await renderer.locator('.dirty-indicator').count(), 1)
-  // ⌥クリックで別ファイルを横に開く（元のペインはそのまま）。
+  // ⌥クリックで data.csv を新しいタブで開く。
   await renderer.getByText('data.csv', { exact: true }).first().click({ modifiers: ['Alt'] })
-  await waitFor(async () => (await panes.count()) === 2, 'エクスプローラーから横に開く')
-  await panes.nth(0).getByRole('heading', { name: 'Edited in split', exact: true }).waitFor()
-  await panes.nth(1).locator('.pane-header').getByText('data.csv').waitFor()
-  await panes.nth(1).getByRole('button', { name: 'エディタを閉じる' }).click()
-  await waitFor(async () => (await panes.count()) === 1, '横に開いたペインを閉じる')
+  await waitFor(async () => (await tabs.count()) === 2, '新しいタブで開く')
+  await visibleBody.locator('.pane-header').getByText('data.csv').waitFor()
+  // README のタブへ戻ると、未保存の編集と Edit 表示がそのまま残っている。
+  await tabs.nth(0).click()
+  await visibleBody.locator('.pane-header').getByText('README.md').waitFor()
+  await visibleBody.getByText('# Edited in tab').waitFor()
+  assert.equal(await tabs.nth(0).locator('.dirty-indicator').count(), 1)
+  // 既に開いているファイルを通常クリックしたら、重複タブを作らずそのタブへ切り替える。
+  await tabs.nth(1).click()
+  await renderer.getByText('README.md', { exact: true }).first().click()
+  await visibleBody.locator('.pane-header').getByText('README.md').waitFor()
+  assert.equal(await tabs.count(), 2)
+  // data.csv のタブを閉じるとタブバーが消えて 1 枚に戻り、README の編集は残る。
+  await tabs.nth(1).getByRole('button', { name: 'タブを閉じる' }).click()
+  await waitFor(async () => (await renderer.locator('.editor-tabs').count()) === 0, 'タブを閉じる')
+  await visibleBody.getByText('# Edited in tab').waitFor()
 
   await evaluate('window.__smokeChanges = []; window.api.onFsEvent(batch => window.__smokeChanges.push(...batch.changes)); void 0;')
   await writeFile(join(project, 'external.txt'), 'External update.\n')

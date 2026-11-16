@@ -8,7 +8,7 @@ import type {
 } from '../../../shared/ipc'
 
 // 開いているファイル（バッファ）の状態。relPath をキーにストアで 1 つだけ持つ。
-// 同じファイルを複数のエディタペインで開いても内容（編集・dirty 状態）は共有される。
+// 同じファイルが複数のタブ（履歴の移動で起こりうる）に現れても内容（編集・dirty 状態）は共有される。
 export interface OpenFile {
   relPath: string
   name: string
@@ -23,9 +23,10 @@ export interface OpenFile {
   externallyDeleted?: boolean
 }
 
-// エディタペイン 1 枚の状態。どのファイルを表示しているかと、そのペイン固有の履歴（戻る/進む）を持つ。
-// 基本は 1 枚で、必要なときだけ分割して 2 枚以上にする（発展的な使い方）。
-export interface EditorPaneState {
+// エディタタブ 1 枚の状態。どのファイルを表示しているかと、そのタブ固有の履歴（戻る/進む）を持つ。
+// 基本は 1 枚で、必要なときだけ新しいタブを開いて 2 枚以上にする（発展的な使い方）。
+// （アプリ全体のプロジェクトタブとは別物。こちらは中央のエディタ内のタブ。）
+export interface EditorTab {
   id: string
   // 表示しているファイルの relPath。未選択は null。
   relPath: string | null
@@ -34,14 +35,11 @@ export interface EditorPaneState {
   historyIndex: number
 }
 
-// エディタペインの最大数。横に並べるので、狭くなりすぎない範囲に抑える。
-export const MAX_EDITOR_PANES = 3
-
 // エディタで特定位置へジャンプ・選択させる指示（検索結果クリック等）。
 // seq は同じ位置を続けてクリックしても再度スクロール・選択させるための単調増加カウンタ。
 export interface PendingReveal {
-  // ジャンプ先のペイン。
-  paneId: string
+  // ジャンプ先のタブ。
+  tabId: string
   relPath: string
   // 1 始まりの行・列（Monaco の座標系）。
   line: number
@@ -53,18 +51,19 @@ export interface PendingReveal {
 
 // ファイルを開く先の指定。
 export interface OpenOptions {
-  // true なら新しいペインを（アクティブペインの右隣に）作って開く。上限のときは隣のペインに開く。
-  side?: boolean
+  // true なら新しいタブ（アクティブタブの右隣）で開く。省略時はアクティブタブのファイルを置き換える。
+  // どちらの場合も、そのファイルを既に別のタブで開いていればそのタブに切り替える。
+  newTab?: boolean
 }
 
 // PendingReveal.seq を採番する単調増加カウンタ。
 let revealSeq = 0
 
-// エディタペイン ID を採番するカウンタ。
-let paneSeq = 0
-function newPane(relPath: string | null = null): EditorPaneState {
+// エディタタブ ID を採番するカウンタ。
+let tabSeq = 0
+function newTab(relPath: string | null = null): EditorTab {
   return {
-    id: `editor-${++paneSeq}`,
+    id: `tab-${++tabSeq}`,
     relPath,
     history: relPath ? [relPath] : [],
     historyIndex: relPath ? 0 : -1
@@ -113,24 +112,24 @@ export function isDirty(file: OpenFile | null): boolean {
   return file != null && !file.isBinary && file.content !== file.savedContent
 }
 
-// アクティブなペインで開いているファイル。未選択は null。
+// アクティブなタブで開いているファイル。未選択は null。
 // ターミナルの「@」やエクスプローラーのハイライトなど、「いま見ているファイル」を参照する側が使う。
 export function selectActiveFile(s: {
   files: Record<string, OpenFile>
-  panes: EditorPaneState[]
-  activePaneId: string
+  tabs: EditorTab[]
+  activeTabId: string
 }): OpenFile | null {
-  const pane = s.panes.find((p) => p.id === s.activePaneId)
-  return pane?.relPath ? (s.files[pane.relPath] ?? null) : null
+  const tab = s.tabs.find((t) => t.id === s.activeTabId)
+  return tab?.relPath ? (s.files[tab.relPath] ?? null) : null
 }
 
-// どのペインからも参照されなくなったバッファを捨てる。
-// （従来どおり、別ファイルへ移ったら元ファイルのバッファは破棄する。他のペインが表示中なら残す。）
+// どのタブからも参照されなくなったバッファを捨てる。
+// （従来どおり、別ファイルへ移ったら元ファイルのバッファは破棄する。他のタブが表示中なら残す。）
 function pruneFiles(
   files: Record<string, OpenFile>,
-  panes: EditorPaneState[]
+  tabs: EditorTab[]
 ): Record<string, OpenFile> {
-  const used = new Set(panes.map((p) => p.relPath).filter((r): r is string => r != null))
+  const used = new Set(tabs.map((p) => p.relPath).filter((r): r is string => r != null))
   const next: Record<string, OpenFile> = {}
   for (const [key, file] of Object.entries(files)) {
     if (used.has(key)) next[key] = file
@@ -138,46 +137,45 @@ function pruneFiles(
   return next
 }
 
-// 1 ペインの履歴に relPath を積む。現在位置（historyIndex）より後ろは破棄してから積む。
+// 1 タブの履歴に relPath を積む。現在位置（historyIndex）より後ろは破棄してから積む。
 // ＝戻った後に別ファイルを開くと、それ以降の「進む」履歴は消える（ブラウザ標準の挙動）。
 // 直前と同じファイルを開いた場合は記録しない（履歴の重複を避ける）。
-function withHistory(pane: EditorPaneState, relPath: string): EditorPaneState {
-  if (pane.history[pane.historyIndex] === relPath) return pane
-  const history = pane.history.slice(0, pane.historyIndex + 1)
+function withHistory(tab: EditorTab, relPath: string): EditorTab {
+  if (tab.history[tab.historyIndex] === relPath) return tab
+  const history = tab.history.slice(0, tab.historyIndex + 1)
   history.push(relPath)
-  return { ...pane, history, historyIndex: history.length - 1 }
+  return { ...tab, history, historyIndex: history.length - 1 }
 }
 
 type StateSetter = (
   partial: Partial<WorkspaceState> | ((state: WorkspaceState) => Partial<WorkspaceState>)
 ) => void
 
-// ファイルを開く先のペインを決める。
-// 通常はアクティブペイン。side のときは新しいペインを作る（上限なら隣のペインを使う）。
-// 新規ペインを作る場合は、挿入後の panes も返す。
+// ファイルを開く先のタブを決める。
+// そのファイルを既に開いているタブがあればそこへ切り替える（同じファイルのタブを重複させない）。
+// なければ、newTab のときは新しいタブをアクティブの右隣に作り、通常はアクティブタブを置き換える。
+// 新規タブを作る場合は、挿入後の tabs も返す。
 function resolveTarget(
   state: WorkspaceState,
-  side: boolean | undefined
-): { paneId: string; panes: EditorPaneState[] } {
-  const { panes, activePaneId } = state
+  relPath: string,
+  newTabRequested: boolean | undefined
+): { tabId: string; tabs: EditorTab[] } {
+  const { tabs, activeTabId } = state
+  const existing = tabs.find((t) => t.relPath === relPath)
+  if (existing) return { tabId: existing.id, tabs }
   const activeIndex = Math.max(
     0,
-    panes.findIndex((p) => p.id === activePaneId)
+    tabs.findIndex((t) => t.id === activeTabId)
   )
-  if (!side) return { paneId: panes[activeIndex].id, panes }
-  if (panes.length >= MAX_EDITOR_PANES) {
-    // 上限: アクティブの右隣（末尾なら左隣）のペインへ開く。
-    const neighbor = panes[activeIndex + 1] ?? panes[activeIndex - 1] ?? panes[activeIndex]
-    return { paneId: neighbor.id, panes }
-  }
-  const created = newPane()
-  const next = [...panes]
+  if (!newTabRequested) return { tabId: tabs[activeIndex].id, tabs }
+  const created = newTab()
+  const next = [...tabs]
   next.splice(activeIndex + 1, 0, created)
-  return { paneId: created.id, panes: next }
+  return { tabId: created.id, tabs: next }
 }
 
 // ファイルを開く共通処理。
-// テキストは対象ペインに展開してエディタ/プレビューに表示する。
+// テキストは対象タブに展開してエディタ/プレビューに表示する。
 // バイナリ/巨大ファイルは OS の既定アプリ（関連付け）で開き、エディタの表示は変更しない。
 // 外部アプリで開けなかった場合のみ、従来どおりプレースホルダ表示にフォールバックする。
 // recordHistory が true のとき、実際にエディタへ展開できたファイルだけを履歴に積む
@@ -189,16 +187,16 @@ async function openFileInternal(
   set: StateSetter,
   options: {
     recordHistory?: boolean
-    side?: boolean
-    // 履歴移動（戻る/進む）で特定のペインを対象にするときに指定する。
-    paneId?: string
+    newTab?: boolean
+    // 履歴移動（戻る/進む）で特定のタブを対象にするときに指定する。
+    tabId?: string
     // 指定があれば、開いたあとにエディタをその行・列へスクロールし、範囲を選択する。
     reveal?: { line: number; column: number; length: number }
   } = {}
 ): Promise<void> {
-  const { recordHistory = true, side, paneId, reveal } = options
-  // 既に（他ペインを含め）開いているバッファは読み直さず再利用する。
-  // ディスクから読み直すと、別ペインで編集中の内容を失ってしまうため。
+  const { recordHistory = true, newTab: openInNewTab, tabId, reveal } = options
+  // 既に（他のタブを含め）開いているバッファは読み直さず再利用する。
+  // ディスクから読み直すと、別タブで編集中の内容を失ってしまうため。
   let buffer: OpenFile | undefined = get().files[relPath]
   if (!buffer) {
     const result = await window.api.readFile({ relPath })
@@ -218,25 +216,25 @@ async function openFileInternal(
   }
   const opened = buffer
   set((state) => {
-    // 履歴移動で指定されたペインが（待っている間に）閉じられていたら何もしない。
-    if (paneId && !state.panes.some((p) => p.id === paneId)) return {}
-    const target = paneId ? { paneId, panes: state.panes } : resolveTarget(state, side)
-    const panes = target.panes.map((p) => {
-      if (p.id !== target.paneId) return p
+    // 履歴移動で指定されたタブが（待っている間に）閉じられていたら何もしない。
+    if (tabId && !state.tabs.some((p) => p.id === tabId)) return {}
+    const target = tabId ? { tabId, tabs: state.tabs } : resolveTarget(state, relPath, openInNewTab)
+    const tabs = target.tabs.map((p) => {
+      if (p.id !== target.tabId) return p
       const moved = { ...p, relPath }
       return recordHistory ? withHistory(moved, relPath) : moved
     })
     return {
-      files: pruneFiles({ ...state.files, [relPath]: opened }, panes),
-      panes,
-      activePaneId: target.paneId,
+      files: pruneFiles({ ...state.files, [relPath]: opened }, tabs),
+      tabs,
+      activeTabId: target.tabId,
       // テキストとして開けたときだけジャンプ指示を積む（バイナリは reveal しない）。
       // reveal 指定の無い通常のオープンでは null にクリアする。そうしないと、以前検索から
       // ジャンプしたファイルを後で普通に開き直した際に、古い位置へ誤ってジャンプしてしまう。
       pendingReveal:
         reveal && !opened.isBinary
           ? {
-              paneId: target.paneId,
+              tabId: target.tabId,
               relPath,
               line: reveal.line,
               column: reveal.column,
@@ -266,39 +264,39 @@ function patchFile(relPath: string, patch: Partial<OpenFile>): void {
   })
 }
 
-// ペインのファイル履歴を delta（-1: 戻る / +1: 進む）だけ移動して、そのファイルを開く。
+// タブのファイル履歴を delta（-1: 戻る / +1: 進む）だけ移動して、そのファイルを開く。
 // 端にいるときは何もしない。履歴は書き換えず、位置だけ動かす。
 async function moveHistory(
-  paneId: string,
+  tabId: string,
   delta: -1 | 1,
   get: () => WorkspaceState,
   set: StateSetter
 ): Promise<void> {
-  const pane = get().panes.find((p) => p.id === paneId)
-  if (!pane) return
-  const newIndex = pane.historyIndex + delta
-  if (newIndex < 0 || newIndex >= pane.history.length) return
-  const relPath = pane.history[newIndex]
+  const tab = get().tabs.find((t) => t.id === tabId)
+  if (!tab) return
+  const newIndex = tab.historyIndex + delta
+  if (newIndex < 0 || newIndex >= tab.history.length) return
+  const relPath = tab.history[newIndex]
   set((state) => ({
-    panes: state.panes.map((p) => (p.id === paneId ? { ...p, historyIndex: newIndex } : p))
+    tabs: state.tabs.map((p) => (p.id === tabId ? { ...p, historyIndex: newIndex } : p))
   }))
   try {
     await openFileInternal(relPath, baseName(relPath), get, set, {
       recordHistory: false,
-      paneId
+      tabId
     })
   } catch {
     // 履歴上のファイルが削除された等で開けない場合は index だけ移動した状態にする。
   }
 }
 
-// エディタ関連の初期状態（空ペイン 1 枚）。
+// エディタ関連の初期状態（空タブ 1 枚）。
 function freshEditorState(): Pick<
   WorkspaceState,
-  'files' | 'panes' | 'activePaneId' | 'pendingReveal'
+  'files' | 'tabs' | 'activeTabId' | 'pendingReveal'
 > {
-  const pane = newPane()
-  return { files: {}, panes: [pane], activePaneId: pane.id, pendingReveal: null }
+  const tab = newTab()
+  return { files: {}, tabs: [tab], activeTabId: tab.id, pendingReveal: null }
 }
 
 // openFolder / openFolderByPath の結果をストアに反映する共通処理。
@@ -314,7 +312,7 @@ async function applyOpenResult(
     rootName: result.name,
     childrenByDir: { '': rootChildren },
     expandedDirs: new Set(),
-    // 別フォルダに切り替えたらエディタは 1 枚の空ペインに戻す（ファイル履歴もペインごとリセット）。
+    // 別フォルダに切り替えたらエディタは 1 枚の空タブに戻す（ファイル履歴もタブごとリセット）。
     ...freshEditorState(),
     // 最近開いたファイルは root ごとに管理する。切り替え直後は空にし、直後の loadRecentFiles で埋める。
     recentFiles: [],
@@ -339,13 +337,13 @@ interface WorkspaceState {
   // 展開中のディレクトリ relPath の集合。
   expandedDirs: Set<string>
 
-  // 開いているファイルのバッファ（relPath → 内容）。複数ペインが同じファイルを開いても 1 つを共有する。
+  // 開いているファイルのバッファ（relPath → 内容）。複数のタブが同じファイルを指しても 1 つを共有する。
   files: Record<string, OpenFile>
 
-  // 中央のエディタペイン（左から順）。基本は 1 枚で、分割すると 2 枚以上になる。常に 1 枚以上ある。
-  panes: EditorPaneState[]
-  // 最後に操作したペイン。エクスプローラー等から開くファイルの表示先になる。
-  activePaneId: string
+  // 中央のエディタタブ（左から順）。基本は 1 枚で、新しいタブで開くと 2 枚以上になる。常に 1 枚以上ある。
+  tabs: EditorTab[]
+  // 表示中（アクティブ）のタブ。エクスプローラー等から開くファイルの表示先（置き換え対象）になる。
+  activeTabId: string
 
   // エディタへ渡す「この行・列へジャンプして選択せよ」という指示（検索結果クリック等）。
   // MonacoEditor が seq の変化を検知して反映する。未指定は null。
@@ -391,25 +389,23 @@ interface WorkspaceState {
   // 指定パスのフォルダを開く（最近開いた一覧からの選択）。
   openFolderByPath: (path: string) => Promise<void>
   toggleDir: (relPath: string) => Promise<void>
-  // 既定ではアクティブペインに開く。options.side なら新しいペインを横に作って開く。
+  // 既定ではアクティブタブのファイルを置き換えて開く。options.newTab なら新しいタブで開く。
   openFile: (node: FileNode, options?: OpenOptions) => Promise<void>
   // project root 相対パスを指定してファイルを開く（プレビュー内リンク等から呼ぶ）。
   // 開けない（存在しない・ディレクトリ・root 外）場合は何もしない。
   openFileByRelPath: (relPath: string, options?: OpenOptions) => Promise<void>
   // 相対パスのファイルを開き、指定の行・列へジャンプして範囲を選択する（検索結果クリック）。
   openFileAtLocation: (relPath: string, line: number, column: number, length: number) => Promise<void>
-  // 指定ペインで開いているファイルの指定行へジャンプ指示だけを積む（バックログビューの索引行ジャンプ）。
+  // 指定タブで開いているファイルの指定行へジャンプ指示だけを積む（バックログビューの索引行ジャンプ）。
   // openFileAtLocation と違いディスクから読み直さないため、未保存の編集を保持したまま移動できる。
-  revealAt: (paneId: string, line: number) => void
-  // ペインのファイル履歴を 1 つ戻る / 進む。端にいるときは何もしない。
-  goBack: (paneId: string) => Promise<void>
-  goForward: (paneId: string) => Promise<void>
-  // 指定ペインを右隣に複製して分割する（同じファイルを開き、新しいペインをアクティブにする）。上限なら何もしない。
-  splitPane: (paneId: string) => void
-  // ペインを閉じる（最後の 1 枚は閉じられない）。そのペインだけが持つ未保存の変更があれば確認する。
-  closePane: (paneId: string) => void
-  // アクティブペインを切り替える。
-  setActivePane: (paneId: string) => void
+  revealAt: (tabId: string, line: number) => void
+  // タブのファイル履歴を 1 つ戻る / 進む。端にいるときは何もしない。
+  goBack: (tabId: string) => Promise<void>
+  goForward: (tabId: string) => Promise<void>
+  // タブを閉じる（最後の 1 枚は閉じられない）。そのタブだけが持つ未保存の変更があれば確認する。
+  closeTab: (tabId: string) => void
+  // アクティブタブを切り替える。
+  setActiveTab: (tabId: string) => void
   // エディタの編集内容を反映する。
   updateContent: (relPath: string, content: string) => void
   // 指定ファイルを保存する。binary / 未オープン / 未変更時は何もしない。
@@ -535,17 +531,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 
-  // ファイルを開いて中央ペインに表示する（バイナリは OS の既定アプリで開く）。
+  // ファイルを開いて中央のエディタに表示する（バイナリは OS の既定アプリで開く）。
   openFile: async (node: FileNode, options?: OpenOptions) => {
     if (node.isDirectory) return
-    await openFileInternal(node.relPath, node.name, get, set, { side: options?.side })
+    await openFileInternal(node.relPath, node.name, get, set, { newTab: options?.newTab })
   },
 
   // project root 相対パスを指定してファイルを開く。
   // explorer の openFile と同じ共通処理を使い、挙動を揃える。
   openFileByRelPath: async (relPath: string, options?: OpenOptions) => {
     try {
-      await openFileInternal(relPath, baseName(relPath), get, set, { side: options?.side })
+      await openFileInternal(relPath, baseName(relPath), get, set, { newTab: options?.newTab })
     } catch {
       // 読めない（存在しない・ディレクトリ・root 外を main が拒否）場合は何もしない。
       // 「最近開いたファイル」から消えたファイルをクリックしたケースに備え、一覧から掃除する。
@@ -570,51 +566,37 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 
-  // 指定ペインで開いているファイル内の指定行へジャンプ指示を積む。
+  // 指定タブで開いているファイル内の指定行へジャンプ指示を積む。
   // ディスクを読み直さず pendingReveal だけを更新するので、dirty な編集内容は失われない
   // （EditorPane 側の activeReveal 監視が Edit モードへ切り替えて該当行を選択する）。
-  revealAt: (paneId: string, line: number) => {
-    const { panes, files } = get()
-    const relPath = panes.find((p) => p.id === paneId)?.relPath
+  revealAt: (tabId: string, line: number) => {
+    const { tabs, files } = get()
+    const relPath = tabs.find((p) => p.id === tabId)?.relPath
     if (!relPath || !files[relPath] || files[relPath].isBinary) return
     set({
-      pendingReveal: { paneId, relPath, line, column: 1, length: 0, seq: ++revealSeq }
+      pendingReveal: { tabId, relPath, line, column: 1, length: 0, seq: ++revealSeq }
     })
   },
 
-  // ペインのファイル履歴を 1 つ戻る。先頭にいるときは何もしない。
+  // タブのファイル履歴を 1 つ戻る。先頭にいるときは何もしない。
   // 履歴移動なので recordHistory=false で開き、履歴は書き換えない。
-  goBack: async (paneId: string) => {
-    await moveHistory(paneId, -1, get, set)
+  goBack: async (tabId: string) => {
+    await moveHistory(tabId, -1, get, set)
   },
 
-  // ペインのファイル履歴を 1 つ進む。末尾にいるときは何もしない。
-  goForward: async (paneId: string) => {
-    await moveHistory(paneId, 1, get, set)
+  // タブのファイル履歴を 1 つ進む。末尾にいるときは何もしない。
+  goForward: async (tabId: string) => {
+    await moveHistory(tabId, 1, get, set)
   },
 
-  // 指定ペインを右隣に複製する。同じファイルのバッファを共有するので、片方の編集がもう片方にも映る
-  // （Markdown を Edit と Preview で並べて見る、といった使い方ができる）。
-  splitPane: (paneId: string) => {
-    set((state) => {
-      if (state.panes.length >= MAX_EDITOR_PANES) return {}
-      const index = state.panes.findIndex((p) => p.id === paneId)
-      if (index === -1) return {}
-      const created = newPane(state.panes[index].relPath)
-      const panes = [...state.panes]
-      panes.splice(index + 1, 0, created)
-      return { panes, activePaneId: created.id }
-    })
-  },
-
-  // ペインを閉じる。そのペインでしか開いていない dirty なファイルは、破棄してよいか確認する。
-  closePane: (paneId: string) => {
-    const { panes, files, activePaneId } = get()
-    if (panes.length <= 1) return
-    const index = panes.findIndex((p) => p.id === paneId)
+  // タブを閉じる。そのタブでしか開いていない dirty なファイルは、破棄してよいか確認する。
+  closeTab: (tabId: string) => {
+    const { tabs, files, activeTabId } = get()
+    if (tabs.length <= 1) return
+    const index = tabs.findIndex((p) => p.id === tabId)
     if (index === -1) return
-    const closing = panes[index]
-    const remaining = panes.filter((p) => p.id !== paneId)
+    const closing = tabs[index]
+    const remaining = tabs.filter((p) => p.id !== tabId)
     const file = closing.relPath ? files[closing.relPath] : null
     const stillShown =
       closing.relPath != null && remaining.some((p) => p.relPath === closing.relPath)
@@ -622,21 +604,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const ok = window.confirm(`${file.name} には未保存の変更があります。破棄して閉じますか？`)
       if (!ok) return
     }
-    // アクティブを閉じたときは、隣（右、なければ左）のペインへ移す。
+    // アクティブを閉じたときは、隣（右、なければ左）のタブへ移す。
     const nextActive =
-      activePaneId === paneId ? (remaining[index] ?? remaining[index - 1]).id : activePaneId
+      activeTabId === tabId ? (remaining[index] ?? remaining[index - 1]).id : activeTabId
     set({
-      panes: remaining,
-      activePaneId: nextActive,
+      tabs: remaining,
+      activeTabId: nextActive,
       files: pruneFiles(files, remaining)
     })
   },
 
-  // アクティブペインを切り替える。変化がなければ何もしない（不要な再描画を避ける）。
-  setActivePane: (paneId: string) => {
-    if (get().activePaneId === paneId) return
-    if (!get().panes.some((p) => p.id === paneId)) return
-    set({ activePaneId: paneId })
+  // アクティブタブを切り替える。変化がなければ何もしない（不要な再描画を避ける）。
+  setActiveTab: (tabId: string) => {
+    if (get().activeTabId === tabId) return
+    if (!get().tabs.some((p) => p.id === tabId)) return
+    set({ activeTabId: tabId })
   },
 
   // エディタの編集内容をストアに反映する。
@@ -725,7 +707,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }
     }
 
-    // 3. 開いているファイル（バッファ）への反映。ペインに関係なくバッファ単位で行う。
+    // 3. 開いているファイル（バッファ）への反映。タブに関係なくバッファ単位で行う。
     for (const file of Object.values(get().files)) {
       const change = batch.changes.find((c) => c.relPath === file.relPath)
       if (!change) continue
@@ -771,7 +753,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   // ファイル/フォルダをリネームする。
   // 開いているファイルがリネーム対象そのもの、またはリネームしたフォルダ配下なら relPath を付け替える
-  // （バッファ・各ペインの表示先・履歴のすべて）。
+  // （バッファ・各タブの表示先・履歴のすべて）。
   renamePath: async (relPath: string, newName: string) => {
     const result = await window.api.renamePath({ relPath, newName })
     // 旧 relPath を新 relPath へ写す。対象外はそのまま返す。
@@ -789,12 +771,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
             ? file
             : { ...file, relPath: next, name: key === relPath ? newName : file.name }
       }
-      const panes = state.panes.map((p) => ({
+      const tabs = state.tabs.map((p) => ({
         ...p,
         relPath: p.relPath ? remap(p.relPath) : null,
         history: p.history.map(remap)
       }))
-      return { files, panes }
+      return { files, tabs }
     })
   },
 

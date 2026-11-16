@@ -2052,29 +2052,77 @@ body {
   background: #333;
 }
 
-/* ---- エディタの複数ペイン（分割） ---- */
+/* ---- エディタのタブ ---- */
 
-/* エディタ領域のグループは親 Panel を埋める。 */
-.editor-group {
+/* エディタ領域: タブバー（2 枚以上のときだけ）+ 本体。親 Panel を埋める。 */
+.editor-area {
+  display: flex;
+  flex-direction: column;
   height: 100%;
 }
 
-/* ヘッダー右端の操作ボタン群（分割 / 閉じる）。 */
-.pane-actions {
-  margin-left: auto;
+.editor-tabs {
+  flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  gap: 2px;
+  align-items: stretch;
+  height: 30px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  /* 横スクロールバーでバーの高さが変わらないよう隠す（ホイール/トラックパッドでスクロールできる）。 */
+  scrollbar-width: none;
 }
 
-.pane-action-btn {
+.editor-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-tab {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 0 6px 0 12px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  border-right: 1px solid var(--border);
+  /* 下線の分だけ高さを確保し、アクティブ時に位置がずれないようにする。 */
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.editor-tab:hover {
+  color: var(--fg);
+}
+
+.editor-tab.active {
+  color: var(--fg);
+  background: var(--bg);
+  border-bottom-color: var(--accent);
+}
+
+.editor-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editor-tab .dirty-indicator {
+  flex: 0 0 auto;
+}
+
+.editor-tab-close {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   padding: 0;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
   color: var(--fg-dim);
   background: transparent;
@@ -2083,27 +2131,27 @@ body {
   cursor: pointer;
 }
 
-.pane-action-btn:hover:not(:disabled) {
+.editor-tab-close:hover {
   color: var(--fg);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.1);
 }
 
-.pane-action-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
+.editor-tab-bodies {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
-/* 2 枚以上のときだけ、いま操作中のペインをヘッダー下線で示す。 */
-.pane-inner.multi .pane-header {
-  border-bottom: 2px solid transparent;
+/* 非アクティブなタブは隠すだけでアンマウントしない（状態を保つため）。 */
+.editor-tab-body {
+  display: none;
+  height: 100%;
 }
 
-.pane-inner.active-pane .pane-header {
-  border-bottom-color: var(--accent);
-  color: var(--fg);
+.editor-tab-body.active {
+  display: block;
 }
 
-/* 狭いペイン（分割時）でもヘッダーが崩れないようにする。
+/* 中央ペインが狭いときもヘッダーが崩れないようにする。
    ファイル名だけが縮んで省略表示になり、ボタン類は折り返さず・縮まない。 */
 .pane-header {
   overflow: hidden;
@@ -2133,9 +2181,4 @@ body {
 .pane-title .dirty-indicator {
   flex: 0 0 auto;
   white-space: pre;
-}
-
-/* 分割時はヘッダー内の余白を詰める。 */
-.pane-inner.multi .pane-header {
-  padding: 0 6px;
 }

@@ -207,13 +207,13 @@ function TreeNode({ node, depth, statuses, changedDirs }: TreeProps): JSX.Elemen
       ? ' git-dir-changed'
       : ''
 
-  // ⌥ を押しながらクリックすると、エディタを横に分割して開く。
+  // ⌥ を押しながらクリックすると、新しいタブで開く。
   const handleClick = (e: React.MouseEvent): void => {
     if (isDeleted) return
     if (node.isDirectory) {
       void toggleDir(node.relPath)
     } else {
-      void openFile(node, { side: e.altKey })
+      void openFile(node, { newTab: e.altKey })
     }
   }
 
@@ -307,7 +307,7 @@ function ChangedFileRow({ entry }: { entry: ChangedEntry }): JSX.Element {
 
   const handleClick = (e: React.MouseEvent): void => {
     if (isDeleted) return
-    void openFile(node, { side: e.altKey })
+    void openFile(node, { newTab: e.altKey })
   }
 
   const handleContextMenu = (e: React.MouseEvent): void => {
@@ -500,7 +500,7 @@ function Bookmarks(): JSX.Element | null {
               key={relPath}
               className={`recent-file-row${isActive ? ' active' : ''}${isMenuTarget ? ' menu-target' : ''}`}
               title={relPath}
-              onClick={(e) => void openFileByRelPath(relPath, { side: e.altKey })}
+              onClick={(e) => void openFileByRelPath(relPath, { newTab: e.altKey })}
               onContextMenu={(e) => {
                 e.preventDefault()
                 openMenu({ relPath, name, isDirectory: false }, e.clientX, e.clientY)
@@ -557,7 +557,7 @@ function RecentFiles(): JSX.Element | null {
               key={relPath}
               className={`recent-file-row${isActive ? ' active' : ''}`}
               title={relPath}
-              onClick={(e) => void openFileByRelPath(relPath, { side: e.altKey })}
+              onClick={(e) => void openFileByRelPath(relPath, { newTab: e.altKey })}
             >
               <span className="tree-icon">📄</span>
               <span className="recent-file-name">{name}</span>
@@ -635,11 +635,11 @@ function FileExplorer(): JSX.Element {
         onSelect: () => insertMention?.(relPath, isDirectory)
       }
     ]
-    // ファイルのみ対象。エディタを横に分割して開く（⌥クリックでも可）。
+    // ファイルのみ対象。新しいタブで開く（⌥クリックでも可）。
     if (!isDirectory) {
       items.push({
-        label: 'エディタを横に分割して開く',
-        onSelect: () => void openFileByRelPath(relPath, { side: true })
+        label: '新しいタブで開く',
+        onSelect: () => void openFileByRelPath(relPath, { newTab: true })
       })
     }
     // ブックマークはファイルのみ対象。登録済みなら解除、未登録なら追加のトグルにする。

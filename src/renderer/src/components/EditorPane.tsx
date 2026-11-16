@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useWorkspaceStore, isDirty, MAX_EDITOR_PANES } from '../store/workspace'
+import { useWorkspaceStore, isDirty } from '../store/workspace'
 import { useBacklogStore } from '../store/backlog'
 import MonacoEditor from './MonacoEditor'
 import MarkdownPreview from './MarkdownPreview'
@@ -26,13 +26,12 @@ function isCsv(relPath: string): boolean {
 const TOC_OPEN_KEY = 'md-toc-open'
 
 // 中央ペイン: エディタ / ビューワー。Monaco Editor でテキスト編集と保存を行う。
-// 基本は 1 枚だが、分割して横に並べられる（発展的な使い方）。1 枚が 1 つのファイルを表示し、
-// Edit / Preview などの表示モードや目次の状態はペインごとに独立して持つ。
-function EditorPane({ paneId }: { paneId: string }): JSX.Element {
-  const pane = useWorkspaceStore((s) => s.panes.find((p) => p.id === paneId))
-  const paneCount = useWorkspaceStore((s) => s.panes.length)
-  const isActivePane = useWorkspaceStore((s) => s.activePaneId === paneId)
-  const activeFile = useWorkspaceStore((s) => (pane?.relPath ? (s.files[pane.relPath] ?? null) : null))
+// 1 つのエディタタブの中身（1 ファイル分）で、Edit / Preview などの表示モードや目次の状態は
+// タブごとに独立して持つ。タブの切り替えは EditorArea が行い、非アクティブなタブも
+// マウントしたまま隠す（スクロール位置・カーソル・undo・表示モードを保つ）。
+function EditorPane({ tabId }: { tabId: string }): JSX.Element {
+  const tab = useWorkspaceStore((s) => s.tabs.find((t) => t.id === tabId))
+  const activeFile = useWorkspaceStore((s) => (tab?.relPath ? (s.files[tab.relPath] ?? null) : null))
   const pendingReveal = useWorkspaceStore((s) => s.pendingReveal)
   const updateContent = useWorkspaceStore((s) => s.updateContent)
   const saveFile = useWorkspaceStore((s) => s.saveFile)
@@ -40,14 +39,10 @@ function EditorPane({ paneId }: { paneId: string }): JSX.Element {
   const dismissExternalChange = useWorkspaceStore((s) => s.dismissExternalChange)
   const goBack = useWorkspaceStore((s) => s.goBack)
   const goForward = useWorkspaceStore((s) => s.goForward)
-  const splitPane = useWorkspaceStore((s) => s.splitPane)
-  const closePane = useWorkspaceStore((s) => s.closePane)
-  const setActivePane = useWorkspaceStore((s) => s.setActivePane)
 
-  // 戻る/進むが可能か（履歴の端では不可）。履歴はペインごと。
-  const canBack = (pane?.historyIndex ?? -1) > 0
-  const canForward = (pane?.historyIndex ?? -1) < (pane?.history.length ?? 0) - 1
-  const multiple = paneCount > 1
+  // 戻る/進むが可能か（履歴の端では不可）。履歴はタブごと。
+  const canBack = (tab?.historyIndex ?? -1) > 0
+  const canForward = (tab?.historyIndex ?? -1) < (tab?.history.length ?? 0) - 1
 
   const dirty = isDirty(activeFile)
   const markdown = activeFile != null && !activeFile.isBinary && isMarkdown(activeFile.relPath)
@@ -96,11 +91,11 @@ function EditorPane({ paneId }: { paneId: string }): JSX.Element {
   const editorToc = useEditorToc(editor, content, editMode)
   const toc = previewMode ? previewToc : editorToc
 
-  // このペインに対するジャンプ指示（検索結果クリック等）。対象が今このペインで開いているファイルのときだけ有効。
+  // このタブに対するジャンプ指示（検索結果クリック等）。対象が今このタブで開いているファイルのときだけ有効。
   const activeReveal =
     pendingReveal &&
     activeFile &&
-    pendingReveal.paneId === paneId &&
+    pendingReveal.tabId === tabId &&
     pendingReveal.relPath === activeFile.relPath
       ? pendingReveal
       : null
@@ -122,17 +117,12 @@ function EditorPane({ paneId }: { paneId: string }): JSX.Element {
   }
 
   return (
-    // ペイン内のどこを操作してもこのペインをアクティブにする（キャプチャ段階で拾い、Monaco 内クリックも含める）。
-    <div
-      className={`pane-inner${multiple ? ' multi' : ''}${multiple && isActivePane ? ' active-pane' : ''}`}
-      onMouseDownCapture={() => setActivePane(paneId)}
-      onFocusCapture={() => setActivePane(paneId)}
-    >
+    <div className="pane-inner">
       <div className="pane-header">
         <span className="history-nav">
           <button
             className="history-nav-btn"
-            onClick={() => void goBack(paneId)}
+            onClick={() => void goBack(tabId)}
             disabled={!canBack}
             title="戻る"
             aria-label="戻る"
@@ -141,7 +131,7 @@ function EditorPane({ paneId }: { paneId: string }): JSX.Element {
           </button>
           <button
             className="history-nav-btn"
-            onClick={() => void goForward(paneId)}
+            onClick={() => void goForward(tabId)}
             disabled={!canForward}
             title="進む"
             aria-label="進む"
@@ -195,34 +185,6 @@ function EditorPane({ paneId }: { paneId: string }): JSX.Element {
         ) : (
           'Editor'
         )}
-        <span className="pane-actions">
-          <button
-            className="pane-action-btn"
-            onClick={() => splitPane(paneId)}
-            disabled={paneCount >= MAX_EDITOR_PANES}
-            title={
-              paneCount >= MAX_EDITOR_PANES
-                ? `エディタは最大 ${MAX_EDITOR_PANES} 枚までです`
-                : 'エディタを横に分割（同じファイルを並べて開く）'
-            }
-            aria-label="エディタを横に分割"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-              <rect x="2" y="3" width="12" height="10" rx="1" />
-              <path d="M8 3v10" />
-            </svg>
-          </button>
-          {multiple && (
-            <button
-              className="pane-action-btn"
-              onClick={() => closePane(paneId)}
-              title="このエディタを閉じる"
-              aria-label="エディタを閉じる"
-            >
-              ×
-            </button>
-          )}
-        </span>
       </div>
       {activeFile?.externallyChanged && (
         <div className="conflict-banner">
@@ -260,7 +222,7 @@ function EditorPane({ paneId }: { paneId: string }): JSX.Element {
           <BacklogView
             def={backlogDef}
             openRelPath={activeFile.relPath}
-            paneId={paneId}
+            tabId={tabId}
             content={activeFile.content}
             // 索引ファイルを切り替えたら（アクティブ⇄完了など）フィルタ等の内部状態をリセットする。
             key={activeFile.relPath}
