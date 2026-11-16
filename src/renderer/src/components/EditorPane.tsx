@@ -81,7 +81,7 @@ function EditorPane({ tabId }: { tabId: string }): JSX.Element {
   const backlogMode = effectiveView === 'backlog'
 
   // 目次（TOC）の情報源はモードで異なる。Preview は描画済み DOM（.pane-body 内）、
-  // Edit は Monaco のソース行番号を使う。どちらも同じ TocRail で右下にフローティング表示する。
+  // Edit は Monaco のソース行番号を使う。どちらも同じ TocRail で右上にフローティング表示する。
   const paneBodyRef = useRef<HTMLDivElement>(null)
   const [editor, setEditor] = useState<monaco.editor.IStandaloneCodeEditor | null>(null)
   const previewMode = markdown && effectiveView === 'preview'
@@ -253,7 +253,7 @@ function EditorPane({ tabId }: { tabId: string }): JSX.Element {
           />
         )}
       </div>
-      {/* 目次はペイン全体の右下にフローティング表示する（.pane-body の外＝スクロール非追従）。 */}
+      {/* 目次はペイン全体の右上にフローティング表示する（.pane-body の外＝スクロール非追従）。 */}
       {markdown && !backlogMode && tocOpen && toc.headings.length > 0 && (
         <div className="toc-float">
           <TocRail headings={toc.headings} activeKey={toc.activeKey} onJump={toc.jump} />

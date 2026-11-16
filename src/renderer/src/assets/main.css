@@ -175,7 +175,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  /* 目次（.toc-float）をペイン右下にフローティングさせる際の位置基準。 */
+  /* 目次（.toc-float）をペイン右上にフローティングさせる際の位置基準。 */
   position: relative;
 }
 
@@ -1216,16 +1216,17 @@ body {
 
 /* ===== Markdown 目次（TOC）レール ===== */
 
-/* 目次はエディタペインの右下にフローティング表示する。
+/* 目次はエディタペインの右上にフローティング表示する。
    スクロールコンテナ（.pane-body）の外＝.pane-inner 基準で絶対配置し、
    本文スクロールや Monaco の内部スクロールに関係なく位置を固定する。
    Edit / Preview どちらのモードでも同じ配置になる。 */
 .toc-float {
   position: absolute;
   right: 8px;
-  bottom: 16px;
-  /* ヘッダーや上端を越えないよう、ペイン高さから余白を引いた範囲に収める。 */
-  max-height: calc(100% - 60px);
+  /* ペインヘッダー（30px）の下から始める。 */
+  top: 38px;
+  /* ペイン下端を越えないよう、ペイン高さからヘッダー分と余白を引いた範囲に収める。 */
+  max-height: calc(100% - 54px);
   display: flex;
   z-index: 5;
 }
