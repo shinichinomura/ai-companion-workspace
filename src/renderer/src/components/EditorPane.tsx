@@ -7,6 +7,7 @@ import CsvPreview from './CsvPreview'
 import BacklogView from './BacklogView'
 import TocRail from './TocRail'
 import { usePreviewToc, useEditorToc } from './useToc'
+import { scrollKey, useScrollMemory } from './scrollMemory'
 import type { monaco } from './monacoSetup'
 
 // Markdown として扱う拡張子か判定する。
@@ -90,6 +91,20 @@ function EditorPane({ tabId }: { tabId: string }): JSX.Element {
   const previewToc = usePreviewToc(paneBodyRef, content, previewMode)
   const editorToc = useEditorToc(editor, content, editMode)
   const toc = previewMode ? previewToc : editorToc
+
+  // .pane-body 自身がスクロールする表示（Markdown/CSV プレビュー・バックログ）では、
+  // ファイルごとのスクロール位置を覚えて復元する（記憶がなければ先頭）。
+  // Monaco は内部でスクロールするため MonacoEditor 側で同様に扱う。
+  const bodyScrolls =
+    activeFile != null &&
+    !activeFile.isBinary &&
+    ((backlogMode && backlogDef != null) ||
+      (markdown && effectiveView === 'preview') ||
+      (csv && effectiveView === 'preview'))
+  useScrollMemory(
+    paneBodyRef,
+    bodyScrolls && activeFile ? scrollKey(activeFile.relPath, effectiveView) : null
+  )
 
   // このタブに対するジャンプ指示（検索結果クリック等）。対象が今このタブで開いているファイルのときだけ有効。
   const activeReveal =

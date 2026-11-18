@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { monaco, languageFromPath } from './monacoSetup'
+import { scrollKey, saveScrollTop, loadScrollTop } from './scrollMemory'
 
 interface MonacoEditorProps {
   // 編集対象を一意に識別する相対パス。変わったらモデルを切り替える。
@@ -18,6 +19,13 @@ interface MonacoEditorProps {
   onEditorReady?: (editor: monaco.editor.IStandaloneCodeEditor | null) => void
 }
 
+// エディタの現在のスクロール位置を path の記憶として保存する。
+// 非表示タブ（高さ 0）では位置が丸められている可能性があるため記憶しない。
+function saveEditorScroll(editor: monaco.editor.IStandaloneCodeEditor, path: string): void {
+  if (editor.getLayoutInfo().height === 0) return
+  saveScrollTop(scrollKey(path, 'edit'), editor.getScrollTop())
+}
+
 // Monaco Editor の薄いラッパー。エディタ本体は 1 度だけ生成し、
 // path/value の変化に応じてモデルと内容を更新する。
 function MonacoEditor({
@@ -34,6 +42,8 @@ function MonacoEditor({
   const onChangeRef = useRef(onChange)
   const onSaveRef = useRef(onSave)
   const onEditorReadyRef = useRef(onEditorReady)
+  // スクロール位置を保存するときの「今表示しているファイル」。
+  const pathRef = useRef(path)
   onChangeRef.current = onChange
   onSaveRef.current = onSave
   onEditorReadyRef.current = onEditorReady
@@ -66,6 +76,8 @@ function MonacoEditor({
     })
 
     return () => {
+      // Edit → Preview 切り替え等でアンマウントされる前に、スクロール位置を記憶する。
+      saveEditorScroll(editor, pathRef.current)
       onEditorReadyRef.current?.(null)
       editor.dispose()
       editorRef.current = null
@@ -74,18 +86,33 @@ function MonacoEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // path が変わったら言語を更新し、スクロール位置を先頭へ戻す。
-  // エディタ本体は使い回すため（モデルの中身だけ差し替える）、別ファイルを開いても
-  // 前のファイルのスクロール位置が残ってしまう。開くたびに先頭へリセットする。
+  // path が変わったら（マウント直後を含む）、旧ファイルのスクロール位置を記憶したうえで
+  // 言語・内容を新ファイルに切り替え、新ファイルの記憶位置（なければ先頭）へ復元する。
+  // エディタ本体は使い回すため（モデルの中身だけ差し替える）、何もしないと前のファイルの
+  // スクロール位置が残ってしまう。
+  // 旧位置の保存は内容を差し替える前でないと、短い内容への置換で位置が丸められてしまうため、
+  // 内容の反映（setValue）もここで行ってから復元する。
   // reveal（検索結果ジャンプ等）による移動は後続の effect で行うため、そちらが優先される。
   useEffect(() => {
     const editor = editorRef.current
     if (!editor) return
+    if (pathRef.current !== path) {
+      saveEditorScroll(editor, pathRef.current)
+      pathRef.current = path
+    }
     const model = editor.getModel()
     if (model) {
       monaco.editor.setModelLanguage(model, languageFromPath(path))
     }
-    editor.setScrollPosition({ scrollTop: 0, scrollLeft: 0 })
+    if (editor.getValue() !== value) {
+      editor.setValue(value)
+    }
+    editor.setScrollPosition({
+      scrollTop: loadScrollTop(scrollKey(path, 'edit')),
+      scrollLeft: 0
+    })
+    // path の変化だけをトリガーにする。value の追従は次の effect が担う。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path])
 
   // 外部由来で value が変わった場合のみ内容を反映する
