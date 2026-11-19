@@ -18,11 +18,49 @@ interface TerminalPaneProps {
 
 // タブ内の 1 ターミナル。id は PTY と対応する識別子、num は表示用の連番（閉じてもずれない）。
 // name はユーザーが付けた任意の名前。未設定なら連番を表示する。
-// ターミナル（PTY）自体がアプリ再起動で消えるセッション内の存在なので、名前も永続化しない。
+// ターミナル（PTY）自体はアプリ再起動で消えるが、タブ構成（id・連番・名前・アクティブ）は
+// プロジェクトごとに localStorage へ保存し、再起動後に同じ構成のシェルを立ち上げ直す。
+// （そのターミナルで claude / codex が動いていた場合の会話再開は main 側が担当する。）
 interface TermTab {
   id: string
   num: number
   name?: string
+}
+
+// ターミナルのタブ構成の保存形式。
+interface SavedTerminalLayout {
+  counter: number
+  activeId: string
+  tabs: TermTab[]
+}
+
+// タブ構成の localStorage キー。全アプリタブが localStorage を共有するため root ごとに分ける。
+function terminalLayoutKey(root: string): string {
+  return `terminal-layout:${root}`
+}
+
+// 保存済みのタブ構成を読む。無い・壊れている場合は null。
+function loadTerminalLayout(root: string | null): SavedTerminalLayout | null {
+  if (!root) return null
+  try {
+    const raw = localStorage.getItem(terminalLayoutKey(root))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<SavedTerminalLayout>
+    if (!Array.isArray(parsed.tabs) || parsed.tabs.length === 0) return null
+    const tabs = parsed.tabs.filter(
+      (t): t is TermTab =>
+        typeof t?.id === 'string' &&
+        typeof t.num === 'number' &&
+        (t.name === undefined || typeof t.name === 'string')
+    )
+    if (tabs.length === 0) return null
+    const maxNum = Math.max(...tabs.map((t) => t.num))
+    const counter = typeof parsed.counter === 'number' ? Math.max(parsed.counter, maxNum) : maxNum
+    const activeId = tabs.some((t) => t.id === parsed.activeId) ? (parsed.activeId as string) : tabs[0].id
+    return { counter, activeId, tabs }
+  } catch {
+    return null
+  }
 }
 
 // ベル通知などに出すターミナルの表示名。名前があればそれ、無ければ「ターミナル N」。
@@ -58,15 +96,29 @@ function TerminalPane({
   // ショートカットで、裏でプロンプトを投入するものではない（spec 設計原則）。
   const quickPrompts = useSettingsStore((s) => s.quickPrompts)
 
+  // 前回のタブ構成（マウント時に 1 度だけ読む）。root 変更時は本コンポーネントごと再マウントされる。
+  const [saved] = useState(() => loadTerminalLayout(root))
+
   // ターミナルに振る連番。閉じても再利用せず、表示番号を安定させる。
-  const counterRef = useRef(0)
+  const counterRef = useRef(saved?.counter ?? 0)
   const makeTab = (): TermTab => {
     counterRef.current += 1
     return { id: `t${counterRef.current}`, num: counterRef.current }
   }
 
-  const [tabs, setTabs] = useState<TermTab[]>(() => [makeTab()])
-  const [activeId, setActiveId] = useState<string>(() => tabs[0].id)
+  const [tabs, setTabs] = useState<TermTab[]>(() => saved?.tabs ?? [makeTab()])
+  const [activeId, setActiveId] = useState<string>(() => saved?.activeId ?? tabs[0].id)
+
+  // タブ構成が変わるたびに保存する（アプリ更新・再起動で復元するため）。
+  useEffect(() => {
+    if (!root) return
+    try {
+      const layout: SavedTerminalLayout = { counter: counterRef.current, activeId, tabs }
+      localStorage.setItem(terminalLayoutKey(root), JSON.stringify(layout))
+    } catch {
+      // 保存できなくても動作には影響しない。
+    }
+  }, [root, tabs, activeId])
   // ベル通知クリックからの「このターミナルを開いて」要求で、存在チェックに使う最新の tabs。
   const tabsRef = useRef(tabs)
   tabsRef.current = tabs

@@ -192,15 +192,19 @@ async function openFileInternal(
     tabId?: string
     // 指定があれば、開いたあとにエディタをその行・列へスクロールし、範囲を選択する。
     reveal?: { line: number; column: number; length: number }
+    // 前回セッションの復元による自動オープン。「最近開いたファイル」へは記録せず、
+    // バイナリは OS の既定アプリで勝手に開かない（何も開かずに戻る）。
+    restore?: boolean
   } = {}
 ): Promise<void> {
-  const { recordHistory = true, newTab: openInNewTab, tabId, reveal } = options
+  const { recordHistory = true, newTab: openInNewTab, tabId, reveal, restore = false } = options
   // 既に（他のタブを含め）開いているバッファは読み直さず再利用する。
   // ディスクから読み直すと、別タブで編集中の内容を失ってしまうため。
   let buffer: OpenFile | undefined = get().files[relPath]
   if (!buffer) {
     const result = await window.api.readFile({ relPath })
     if (result.isBinary) {
+      if (restore) return
       const error = await window.api.openPath({ relPath })
       // 開けたらエディタは差し替えない（現在の表示を維持する）。
       if (!error) return
@@ -244,7 +248,7 @@ async function openFileInternal(
           : null
     }
   })
-  if (recordHistory) {
+  if (recordHistory && !restore) {
     // 最近開いたファイルに記録する（現在の root 内のファイルのみ。更新後の一覧で置き換える）。
     // 履歴移動（戻る/進む）や、バイナリを OS アプリで開いただけのケースはここに来ないため記録されない。
     void window.api
@@ -303,10 +307,14 @@ function freshEditorState(): Pick<
 // 結果が null（キャンセル・開けないフォルダ）の場合は何もしない。
 async function applyOpenResult(
   result: OpenFolderResult | null,
-  set: StateSetter
+  set: StateSetter,
+  get: () => WorkspaceState
 ): Promise<void> {
   if (!result) return
   const rootChildren = await window.api.readDir({ relPath: '' })
+  // 空のエディタ状態へ切り替わる間は保存しない（前回の保存内容を空で上書きしないため）。
+  // 解除は restoreEditorSession の finally で行う。
+  restoringEditor = true
   set({
     root: result.root,
     rootName: result.name,
@@ -325,6 +333,87 @@ async function applyOpenResult(
     // 「変更ファイルのみ表示」設定もプロジェクト固有に切り替える。
     showOnlyChanged: loadShowOnlyChanged(result.root)
   })
+  await restoreEditorSession(result.root, get, set)
+}
+
+// エディタのタブ構成（開いているファイル）の保存形式。
+interface SavedEditorSession {
+  // タブ順の relPath（空タブは含めない）。
+  paths: string[]
+  // アクティブだったタブの relPath。
+  active: string | null
+}
+
+// 復元中（および root 切替の途中）は保存を止めるフラグ。
+let restoringEditor = false
+
+// エディタのタブ構成の localStorage キー。全アプリタブが localStorage を共有するため root ごとに分ける。
+function editorSessionKey(root: string): string {
+  return `editor-session:${root}`
+}
+
+function loadEditorSession(root: string): SavedEditorSession | null {
+  try {
+    const raw = localStorage.getItem(editorSessionKey(root))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<SavedEditorSession>
+    if (!Array.isArray(parsed.paths)) return null
+    const paths = parsed.paths.filter((p): p is string => typeof p === 'string')
+    return { paths, active: typeof parsed.active === 'string' ? parsed.active : null }
+  } catch {
+    return null
+  }
+}
+
+// 現在のエディタのタブ構成を保存する。
+function persistEditorSession(state: {
+  root: string | null
+  tabs: EditorTab[]
+  activeTabId: string
+}): void {
+  if (!state.root || restoringEditor) return
+  const paths = state.tabs.map((t) => t.relPath).filter((r): r is string => r != null)
+  const active = state.tabs.find((t) => t.id === state.activeTabId)?.relPath ?? null
+  try {
+    localStorage.setItem(editorSessionKey(state.root), JSON.stringify({ paths, active }))
+  } catch {
+    // 保存できなくても動作には影響しない。
+  }
+}
+
+// 前回開いていたファイルをタブとして開き直す（再起動・アップデート後の復元）。
+// 存在しなくなったファイルは黙って飛ばす。内容はディスクから読み直すため、未保存の編集は復元しない。
+async function restoreEditorSession(
+  root: string,
+  get: () => WorkspaceState,
+  set: StateSetter
+): Promise<void> {
+  try {
+    const saved = loadEditorSession(root)
+    if (!saved) return
+    let first = true
+    for (const relPath of saved.paths) {
+      // 復元の途中で別フォルダに切り替えられたら中止する。
+      if (get().root !== root) return
+      try {
+        // 最初の 1 枚は初期の空タブを置き換え、以降は新しいタブを右へ足していく。
+        await openFileInternal(relPath, baseName(relPath), get, set, {
+          newTab: !first,
+          restore: true
+        })
+      } catch {
+        // 削除・移動されたファイルは飛ばす。
+        continue
+      }
+      if (get().tabs.some((t) => t.relPath === relPath)) first = false
+    }
+    const activeTab = get().tabs.find((t) => t.relPath != null && t.relPath === saved.active)
+    if (activeTab) set({ activeTabId: activeTab.id })
+  } finally {
+    restoringEditor = false
+    // 復元結果（飛ばしたファイルを除いた構成）を保存し直す。
+    persistEditorSession(useWorkspaceStore.getState())
+  }
 }
 
 interface WorkspaceState {
@@ -447,7 +536,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   // フォルダを開き、ルート直下を読み込む。
   openFolder: async () => {
     const result = await window.api.openFolder()
-    await applyOpenResult(result, set)
+    await applyOpenResult(result, set, get)
     await get().refreshGitStatus()
     await get().loadRecentFolders()
     await get().loadRecentFiles()
@@ -491,7 +580,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const last = recent[0]
     if (!last) return
     const result = await window.api.openFolderByPath({ path: last })
-    await applyOpenResult(result, set)
+    await applyOpenResult(result, set, get)
     await get().refreshGitStatus()
     // 開けずに一覧から除外された場合に備えて再取得する。
     await get().loadRecentFolders()
@@ -502,7 +591,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   // 指定パスのフォルダを開く（最近開いた一覧からの選択）。
   openFolderByPath: async (path: string) => {
     const result = await window.api.openFolderByPath({ path })
-    await applyOpenResult(result, set)
+    await applyOpenResult(result, set, get)
     await get().refreshGitStatus()
     await get().loadRecentFolders()
     await get().loadRecentFiles()
@@ -815,3 +904,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ watchStatus: status })
   }
 }))
+
+// エディタのタブ構成が変わるたびに保存する（アプリ更新・再起動で復元するため）。
+useWorkspaceStore.subscribe((state, prev) => {
+  if (state.root !== prev.root || state.tabs !== prev.tabs || state.activeTabId !== prev.activeTabId) {
+    persistEditorSession(state)
+  }
+})

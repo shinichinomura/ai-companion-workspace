@@ -37,6 +37,7 @@ GitHub Releases で無料配布する。統合ターミナルと Claude Code 連
 - Markdown プレビューの HTML は必ずサニタイズする（任意 HTML 実行は不可）。
 - Claude Code の認証情報・OAuth token・設定ファイルは読まない・解析しない。
 - 自動でプロンプトを投入したり、出力を AI チャットとして再包装したりしない。
+- **例外（再起動時のセッション復元）**: アプリの更新・再起動後に `claude` / `codex` の会話を再開するため、動作中プロセスの PID に対応する **セッション ID と cwd だけ** を読む（claude: `~/.claude/sessions/<pid>.json`、codex: `lsof` で開いている rollout ファイル名）。認証情報・`.key`・設定ファイルは読まない。復元時に実行するのは `claude --resume <id>` / `codex resume <id>`（特定できなければ `claude --continue` / `codex resume --last`）のみで、プロンプトは投入しない。実装は [src/main/cli-resume.ts](src/main/cli-resume.ts)。
 
 ## 開発の進め方
 

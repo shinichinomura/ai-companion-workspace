@@ -12,6 +12,7 @@ import {
 import { getProjectRoot, setRootChangedListener } from './workspace'
 import { syncMenuChecks, forgetTabMenuState, refreshRecentMenu } from './menu'
 import { loadSession, saveSession } from './session'
+import { forgetResumeForWc } from './terminal'
 
 // タブストリップ（クロームシェル）の高さ。renderer の shell.css の .tabbar と一致させる。
 const STRIP_H = 38
@@ -188,6 +189,9 @@ function closeTab(id: number): void {
     const next = tabs[idx] ?? tabs[idx - 1]
     activeId = next ? next.id : null
   }
+
+  // ユーザーが明示的に閉じたので、そのプロジェクトの claude / codex 再開情報は捨てる。
+  forgetResumeForWc(id)
 
   win.contentView.removeChildView(tab.view)
   // webContents を破棄する。destroyed で workspace/terminal/git 側の後始末が走る。

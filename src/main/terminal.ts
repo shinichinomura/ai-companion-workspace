@@ -11,6 +11,14 @@ import {
   type TerminalStartResult
 } from '../shared/ipc'
 import { getProjectRoot } from './workspace'
+import {
+  buildResumeCommand,
+  detectCli,
+  loadResumeStore,
+  saveResumeStore,
+  type ResumeInfo,
+  type ResumeStore
+} from './cli-resume'
 
 // 統合ターミナル（spec 2.2.4）。1 タブ（webContents）内に複数のターミナルをタブで開けるよう、
 // PTY を「呼び出し元の webContents（=アプリのタブ）」＋「terminalId（タブ内の各ターミナル）」の
@@ -22,12 +30,133 @@ interface TerminalState {
   term: pty.IPty
   // 出力／終了の送信先 renderer（その PTY を起動したアプリタブ）。
   target: WebContents
+  // この PTY を起動した時点の project root（再開情報のキーに使う）。
+  root: string
+  // この時刻までは「CLI が見つからない」ことを理由に再開情報を消さない。
+  // 再開コマンドを流した直後は CLI がまだ立ち上がっておらず、その間に終了すると記録を失うため。
+  graceUntil: number
 }
+
+// 再開コマンドを流してから、CLI の起動を待つ猶予（ms）。
+const RESUME_GRACE_MS = 60_000
+// 端末出力が止まってから再開コマンドを流すまでの待ち（ms）。シェルのプロンプト表示完了を待つ。
+const RESUME_IDLE_MS = 500
+// シェルが何も出力しなくても、この時間が過ぎたら再開コマンドを流す（ms）。
+const RESUME_MAX_WAIT_MS = 8000
+// 動作中の CLI を走査して記録を更新する間隔（ms）。
+const SCAN_INTERVAL_MS = 10_000
 
 // `${webContents.id}:${terminalId}` → そのターミナルの PTY 状態。
 const stateByKey = new Map<string, TerminalState>()
 // destroyed リスナーを二重登録しないための記録（webContents.id 単位）。
 const cleanupBound = new Set<number>()
+
+// 前回終了時に記録された、各ターミナルで動いていた CLI（claude / codex）。
+// 起動直後の PTY に再開コマンドを流すための元データ。起動時に 1 度だけ読み、以後は書き換えない。
+let launchResume: ResumeStore = {}
+// 現在の記録（launchResume を初期値に、動作中の走査結果で更新してファイルへ保存する）。
+let resumeStore: ResumeStore = {}
+// 既に再開コマンドを流したターミナル（root + id）。シェルの再起動で二重に再開しないための記録。
+const resumed = new Set<string>()
+// 終了処理に入ったか。終了時にタブ／PTY が破棄されても、再開情報を消さないために使う。
+let quitting = false
+let scanTimer: NodeJS.Timeout | null = null
+
+function resumeKey(root: string, id: string): string {
+  return `${root}\0${id}`
+}
+
+// 再開情報を 1 件消す（ユーザーが明示的にターミナル／タブを閉じたとき）。終了処理中は消さない。
+function forgetResume(root: string, id: string): void {
+  if (quitting) return
+  if (resumeStore[root]?.[id]) {
+    delete resumeStore[root][id]
+    if (Object.keys(resumeStore[root]).length === 0) delete resumeStore[root]
+    saveResumeStore(resumeStore)
+  }
+}
+
+// ユーザーがアプリタブ（プロジェクト）を閉じたとき、そのタブの全ターミナルの再開情報を捨てる。
+// アプリ終了で webContents が破棄される経路とは区別するため、tabs.ts の closeTab から明示的に呼ぶ。
+export function forgetResumeForWc(wcId: number): void {
+  const prefix = `${wcId}:`
+  for (const [key, state] of stateByKey) {
+    if (key.startsWith(prefix)) forgetResume(state.root, key.slice(prefix.length))
+  }
+}
+
+// 動作中の全 PTY を走査し、claude / codex が動いていれば再開情報を記録する。
+// 動いていなければ（ユーザーが CLI を終了した）記録を消す。
+function scanResume(): void {
+  const before = JSON.stringify(resumeStore)
+  const now = Date.now()
+  for (const [key, state] of stateByKey) {
+    const id = key.slice(key.indexOf(':') + 1)
+    const info = detectCli(state.term.pid)
+    if (info) {
+      const entry: ResumeInfo = { ...info, savedAt: now }
+      const byId = (resumeStore[state.root] ??= {})
+      // 内容が変わらないなら savedAt だけの更新でファイルを書き換えない。
+      const prev = byId[id]
+      if (
+        !prev ||
+        prev.kind !== entry.kind ||
+        prev.sessionId !== entry.sessionId ||
+        prev.cwd !== entry.cwd
+      ) {
+        byId[id] = entry
+      }
+    } else if (now > state.graceUntil && resumeStore[state.root]?.[id]) {
+      delete resumeStore[state.root][id]
+      if (Object.keys(resumeStore[state.root]).length === 0) delete resumeStore[state.root]
+    }
+  }
+  if (JSON.stringify(resumeStore) !== before) saveResumeStore(resumeStore)
+}
+
+// アプリ終了の直前に呼ぶ。PTY が破棄される前に最後の走査を行い、以後の破棄で記録を消さないようにする。
+export function prepareTerminalQuit(): void {
+  if (quitting) return
+  try {
+    scanResume()
+  } catch {
+    // 走査の失敗で終了を妨げない。直近の定期走査の記録が残る。
+  }
+  quitting = true
+}
+
+// 前回記録された CLI の再開コマンドを、起動直後のシェルに流す。
+// シェルのプロンプトが出る（出力が一旦止まる）のを待ってから、コマンドを実行する。
+function scheduleResume(key: string, term: pty.IPty, root: string, id: string, info: ResumeInfo): void {
+  const rk = resumeKey(root, id)
+  if (resumed.has(rk)) return
+  let done = false
+  let idleTimer: NodeJS.Timeout | null = null
+  const run = (): void => {
+    if (done) return
+    done = true
+    if (idleTimer) clearTimeout(idleTimer)
+    clearTimeout(maxTimer)
+    // この PTY が破棄・差し替え済みなら何もしない（次に張られた PTY が改めて再開する）。
+    const state = stateByKey.get(key)
+    if (state?.term !== term) return
+    resumed.add(rk)
+    state.graceUntil = Date.now() + RESUME_GRACE_MS
+    term.write(buildResumeCommand(info, root) + '\r')
+  }
+  const maxTimer = setTimeout(run, RESUME_MAX_WAIT_MS)
+  // 出力が来るたびに待ちをやり直し、出力が止まったら実行する。
+  term.onData(() => {
+    if (done) return
+    if (idleTimer) clearTimeout(idleTimer)
+    idleTimer = setTimeout(run, RESUME_IDLE_MS)
+  })
+  term.onExit(() => {
+    done = true
+    if (idleTimer) clearTimeout(idleTimer)
+    clearTimeout(maxTimer)
+  })
+}
 
 // 状態マップのキーを作る。
 function keyOf(wcId: number, id: string): string {
@@ -98,7 +227,15 @@ function handleStart(
     cwd: root,
     env: buildEnv()
   })
-  stateByKey.set(key, { term, target: sender })
+  // 前回終了時にこのターミナルで claude / codex が動いていたなら、会話を再開する。
+  const resumeInfo = launchResume[root]?.[req.id]
+  // 再開コマンドを流して CLI が立ち上がるまでは、「CLI が見つからない」で記録を消さない。
+  const graceUntil =
+    resumeInfo && !resumed.has(resumeKey(root, req.id))
+      ? Date.now() + RESUME_MAX_WAIT_MS + RESUME_GRACE_MS
+      : 0
+  stateByKey.set(key, { term, target: sender, root, graceUntil })
+  if (resumeInfo) scheduleResume(key, term, root, req.id, resumeInfo)
 
   term.onData((data) => {
     if (!sender.isDestroyed()) {
@@ -152,11 +289,25 @@ function handleResize(e: Electron.IpcMainEvent, req: TerminalResizeRequest): voi
 
 // renderer 側からの明示破棄（ターミナルタブを閉じたとき）。
 function handleDispose(e: Electron.IpcMainEvent, req: TerminalDisposeRequest): void {
-  killTerm(keyOf(e.sender.id, req.id))
+  const key = keyOf(e.sender.id, req.id)
+  const state = stateByKey.get(key)
+  if (state) forgetResume(state.root, req.id)
+  killTerm(key)
 }
 
 // terminal 関連の IPC ハンドラを登録する。app 起動後に 1 度だけ呼ぶ。
 export function registerTerminalHandlers(): void {
+  launchResume = loadResumeStore()
+  // 現在の記録は前回の内容を引き継ぐ（まだ起動していないターミナルの記録を失わないため）。
+  resumeStore = JSON.parse(JSON.stringify(launchResume)) as ResumeStore
+  scanTimer = setInterval(() => {
+    try {
+      scanResume()
+    } catch {
+      // 走査の失敗は次回に持ち越す。
+    }
+  }, SCAN_INTERVAL_MS)
+  scanTimer.unref()
   ipcMain.handle(IpcChannel.TerminalStart, handleStart)
   ipcMain.on(IpcChannel.TerminalInput, handleInput)
   ipcMain.on(IpcChannel.TerminalResize, handleResize)
@@ -165,6 +316,7 @@ export function registerTerminalHandlers(): void {
 
 // アプリ終了時に全タブ・全ターミナルの PTY を後始末する。
 export function disposeTerminal(): void {
+  if (scanTimer) clearInterval(scanTimer)
   for (const key of [...stateByKey.keys()]) {
     killTerm(key)
   }

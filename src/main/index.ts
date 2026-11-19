@@ -9,7 +9,7 @@ import {
   applyWatchIgnoredDirs,
   disposeWorkspace
 } from './workspace'
-import { registerTerminalHandlers, disposeTerminal } from './terminal'
+import { registerTerminalHandlers, disposeTerminal, prepareTerminalQuit } from './terminal'
 import { registerGitHandlers } from './git'
 import {
   registerAppSettingsHandlers,
@@ -110,6 +110,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// 終了の最初に、動作中の claude / codex の再開情報を確定する（PTY が破棄される前に行う）。
+app.on('before-quit', () => {
+  prepareTerminalQuit()
 })
 
 // 終了前に file watcher と PTY を後始末する。
