@@ -2287,3 +2287,46 @@ body {
   align-items: center;
   gap: 12px;
 }
+
+.pane-arrangement-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+/* 設定画面の入力欄（.quick-prompt-label）と同じ見た目に揃えたドロップダウン。 */
+.pane-arrangement-options select {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  /* ポップアップ（選択肢リスト）もダークで描画させる。 */
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.pane-arrangement-options select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 「デフォルトに戻す」は他セクションのツールバーのボタンと同じ見た目にする。 */
+.pane-arrangement-options button {
+  font-size: 11px;
+  color: var(--fg-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.pane-arrangement-options button:hover {
+  color: var(--fg);
+  background: #333;
+}
