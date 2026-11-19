@@ -493,6 +493,15 @@ body {
   transform: rotate(180deg);
 }
 
+/* ターミナルが上に置かれているときは、畳む方向が上になるのでシェブロンを反転する。 */
+.terminal-toggle.flipped svg {
+  transform: rotate(180deg);
+}
+
+.terminal-toggle.flipped.collapsed svg {
+  transform: none;
+}
+
 /* ヘッダーの下の本体領域。折りたたみ時は display:none で隠す。 */
 .terminal-content {
   flex: 1 1 auto;
@@ -2229,4 +2238,52 @@ body {
 .pane-title .dirty-indicator {
   flex: 0 0 auto;
   white-space: pre;
+}
+
+/* 設定画面: ペイン配置のプレビューと選択欄 */
+.pane-arrangement-preview {
+  margin: 8px 0;
+}
+
+.pane-preview-row {
+  display: flex;
+  gap: 4px;
+  height: 64px;
+}
+
+.pane-preview-row.reversed {
+  flex-direction: row-reverse;
+}
+
+.pane-preview-work {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 4px;
+}
+
+.pane-preview-work.reversed {
+  flex-direction: row-reverse;
+}
+
+.pane-preview-cell {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--fg-dim);
+  background: var(--bg-pane);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.pane-preview-explorer {
+  flex: 0 0 22%;
+}
+
+.pane-arrangement-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
 }

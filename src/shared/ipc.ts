@@ -131,6 +131,22 @@ export interface TabsState {
 // Editor と Terminal の並べ方。'horizontal' = 左右, 'vertical' = 上下。
 export type WorkLayout = 'horizontal' | 'vertical'
 
+// ペインの配置（列位置）のカスタマイズ。
+// PTY を壊さないため、構造は「Explorer | (Editor, Terminal)」の入れ子のまま保ち、
+// Explorer を左右どちらに置くか・Terminal を Editor の前（左/上）に置くかだけを切り替える。
+export interface PaneArrangement {
+  // ファイルツリー（検索ペイン含む）を作業エリアの左右どちらに置くか。
+  explorerSide: 'left' | 'right'
+  // true ならターミナルをエディタの前（左右並びなら左、上下並びなら上）に置く。
+  terminalFirst: boolean
+}
+
+// ペイン配置の初期値（従来どおり: 左に Explorer、Editor の後ろに Terminal）。
+export const DEFAULT_PANE_ARRANGEMENT: PaneArrangement = {
+  explorerSide: 'left',
+  terminalFirst: false
+}
+
 // ターミナルのクイック操作（ヘッダのボタン）。押すと prompt を統合ターミナルに送る。
 // id は React の key と保存後の識別に使う安定 ID。
 export interface QuickPrompt {
@@ -150,6 +166,8 @@ export interface AppSettings {
   // つき fd を 1 つ使うため、.venv のような大量ファイルを含むフォルダを監視すると fd が枯渇し、
   // 新しいターミナルが起動できず即終了する（[プロセスが終了しました (code 0)]）。
   watchIgnoredDirs: string[]
+  // ペインの配置（ファイルツリーの左右・ターミナルの前後）。
+  paneArrangement: PaneArrangement
 }
 
 // 監視から除外するフォルダ名の初期値。fd 枯渇を避けるため、生成物・キャッシュ・仮想環境など
@@ -216,7 +234,8 @@ export const DEFAULT_QUICK_PROMPTS: QuickPrompt[] = [
 // アプリ設定の初期値。
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   quickPrompts: DEFAULT_QUICK_PROMPTS,
-  watchIgnoredDirs: DEFAULT_WATCH_IGNORED_DIRS
+  watchIgnoredDirs: DEFAULT_WATCH_IGNORED_DIRS,
+  paneArrangement: DEFAULT_PANE_ARRANGEMENT
 }
 
 // ファイルツリーの 1 ノード。ディレクトリは遅延展開するため children は持たない。

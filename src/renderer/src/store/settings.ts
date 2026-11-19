@@ -2,7 +2,9 @@ import { create } from 'zustand'
 import {
   DEFAULT_QUICK_PROMPTS,
   DEFAULT_WATCH_IGNORED_DIRS,
+  DEFAULT_PANE_ARRANGEMENT,
   type AppSettings,
+  type PaneArrangement,
   type QuickPrompt
 } from '../../../shared/ipc'
 
@@ -14,6 +16,8 @@ interface SettingsState {
   quickPrompts: QuickPrompt[]
   // ファイル監視から除外するフォルダ名（fd 枯渇対策）。
   watchIgnoredDirs: string[]
+  // ペインの配置（ファイルツリーの左右・ターミナルの前後）。
+  paneArrangement: PaneArrangement
   // main からの読み込みが完了したか。
   loaded: boolean
   // main から設定を読み込んでストアに反映する。起動時に 1 度呼ぶ。
@@ -26,6 +30,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   // 読み込み前はデフォルトを暫定表示する（load 完了後に main の値で上書きされる）。
   quickPrompts: DEFAULT_QUICK_PROMPTS,
   watchIgnoredDirs: DEFAULT_WATCH_IGNORED_DIRS,
+  paneArrangement: DEFAULT_PANE_ARRANGEMENT,
   loaded: false,
 
   load: async () => {
@@ -33,6 +38,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({
       quickPrompts: settings.quickPrompts,
       watchIgnoredDirs: settings.watchIgnoredDirs,
+      paneArrangement: settings.paneArrangement,
       loaded: true
     })
   },
@@ -42,6 +48,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({
       quickPrompts: saved.quickPrompts,
       watchIgnoredDirs: saved.watchIgnoredDirs,
+      paneArrangement: saved.paneArrangement,
       loaded: true
     })
   }

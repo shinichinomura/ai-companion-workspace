@@ -12,6 +12,8 @@ interface TerminalPaneProps {
   onToggle: () => void
   // Editor / Terminal の並べ方。左右並べ（horizontal）では最小化ボタンを隠す。
   layout: WorkLayout
+  // ターミナルをエディタの前（上）に置いているか。上下並びの最小化シェブロンの向きに使う。
+  terminalFirst: boolean
 }
 
 // タブ内の 1 ターミナル。id は PTY と対応する識別子、num は表示用の連番（閉じてもずれない）。
@@ -40,7 +42,12 @@ function escapeAtMentionPath(relPath: string): string {
 // 1 つのアプリタブ内で複数のターミナルをタブで開ける。各ターミナルは TerminalInstance が
 // xterm.js（renderer）と node-pty（main）を IPC で結びつけて保持し、非アクティブなものも
 // マウントしたまま隠す（PTY を保持する）。フォルダ未選択時は起動しない。
-function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.Element {
+function TerminalPane({
+  collapsed,
+  onToggle,
+  layout,
+  terminalFirst
+}: TerminalPaneProps): JSX.Element {
   // project root。未選択ならターミナルは起動しない。root 変更時は App 側で本コンポーネントごと
   // 再マウントされる（rootKey による key 付け）ため、初期状態（ターミナル 1 つ）から作り直る。
   const root = useWorkspaceStore((s) => s.root)
@@ -398,7 +405,7 @@ function TerminalPane({ collapsed, onToggle, layout }: TerminalPaneProps): JSX.E
         {layout === 'vertical' && (
           <button
             type="button"
-            className={`terminal-toggle${collapsed ? ' collapsed' : ''}`}
+            className={`terminal-toggle${collapsed ? ' collapsed' : ''}${terminalFirst ? ' flipped' : ''}`}
             onClick={onToggle}
             title={collapsed ? 'ターミナルを表示' : 'ターミナルを隠す'}
             aria-label={collapsed ? 'ターミナルを表示' : 'ターミナルを隠す'}

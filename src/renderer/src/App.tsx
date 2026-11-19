@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import type { ImperativePanelHandle } from 'react-resizable-panels'
+import type { ImperativePanelGroupHandle, ImperativePanelHandle } from 'react-resizable-panels'
 import FileExplorer from './components/FileExplorer'
 import SearchPane from './components/SearchPane'
 import EditorArea from './components/EditorArea'
@@ -83,6 +83,8 @@ function App(): JSX.Element {
   const refreshGitStatus = useWorkspaceStore((s) => s.refreshGitStatus)
   const setWatchStatus = useWorkspaceStore((s) => s.setWatchStatus)
   const loadSettings = useSettingsStore((s) => s.load)
+  // ペイン配置（ファイルツリーの左右・ターミナルの前後）。設定画面で変更する。
+  const { explorerSide, terminalFirst } = useSettingsStore((s) => s.paneArrangement)
   // 検索ペインの表示状態。左ペインを Explorer と切り替える。
   const searchOpen = useSearchStore((s) => s.open)
   const openSearch = useSearchStore((s) => s.openSearch)
@@ -110,6 +112,9 @@ function App(): JSX.Element {
   const [collapsedSize, setCollapsedSize] = useState(6)
   const terminalPanelRef = useRef<ImperativePanelHandle>(null)
   const workRef = useRef<HTMLDivElement>(null)
+  // 配置変更時にサイズを入れ替えるため、外側 / 内側の PanelGroup を命令的に操作できるようにする。
+  const outerGroupRef = useRef<ImperativePanelGroupHandle>(null)
+  const workGroupRef = useRef<ImperativePanelGroupHandle>(null)
 
   // work エリアの実寸からヘッダーバー相当の % を算出する。レイアウト方向で測る軸を変える。
   // ターミナル以外の場所にファイルをドロップすると Chromium が file:// に遷移して
@@ -154,6 +159,48 @@ function App(): JSX.Element {
       terminalPanelRef.current?.expand()
     }
   }, [layout, terminalCollapsed])
+
+  // 配置（左右・前後）が変わったとき、各ペインのサイズが入れ替わった位置に付いていくようにする。
+  // PanelGroup を作り直すと PTY が消えるため、再マウントせず setLayout で並べ替え後の順に合わせる。
+  // onLayout が返す配列は「現在の並び順」なので、ペイン id ごとのサイズを ref に覚えておく。
+  // 配置が変わった直後の render〜effect の間は、ライブラリの並べ替えに伴う中間値で
+  // 覚えているサイズを汚さないよう settlingRef で更新を止める。
+  const outerSizesRef = useRef<{ explorer: number; work: number }>({ explorer: 20, work: 80 })
+  const workSizesRef = useRef<{ editor: number; terminal: number }>({ editor: 60, terminal: 40 })
+  const settlingRef = useRef(false)
+  const prevArrangementRef = useRef({ explorerSide, terminalFirst })
+  if (
+    prevArrangementRef.current.explorerSide !== explorerSide ||
+    prevArrangementRef.current.terminalFirst !== terminalFirst
+  ) {
+    settlingRef.current = true
+  }
+  const onOuterLayout = (sizes: number[]): void => {
+    if (settlingRef.current || sizes.length !== 2) return
+    const [first, second] = sizes
+    outerSizesRef.current =
+      explorerSide === 'left' ? { explorer: first, work: second } : { explorer: second, work: first }
+  }
+  const onWorkLayout = (sizes: number[]): void => {
+    if (settlingRef.current || sizes.length !== 2) return
+    const [first, second] = sizes
+    workSizesRef.current = terminalFirst
+      ? { terminal: first, editor: second }
+      : { editor: first, terminal: second }
+  }
+  useEffect(() => {
+    if (!settlingRef.current) return
+    prevArrangementRef.current = { explorerSide, terminalFirst }
+    const outer = outerSizesRef.current
+    outerGroupRef.current?.setLayout(
+      explorerSide === 'left' ? [outer.explorer, outer.work] : [outer.work, outer.explorer]
+    )
+    const work = workSizesRef.current
+    workGroupRef.current?.setLayout(
+      terminalFirst ? [work.terminal, work.editor] : [work.editor, work.terminal]
+    )
+    settlingRef.current = false
+  }, [explorerSide, terminalFirst])
 
   // ヘッダーのアイコンから呼ぶ開閉トグル。
   const toggleTerminal = (): void => {
@@ -259,6 +306,61 @@ function App(): JSX.Element {
     else if (params.get('restore') === '1') void restoreLastFolder()
   }, [openFolderByPath, restoreLastFolder])
 
+  // 左ペインは検索表示中だけ SearchPane に差し替える（幅・分割はそのまま）。
+  const explorerPanel = (
+    <Panel
+      key="explorer"
+      id="explorer"
+      order={explorerSide === 'left' ? 1 : 2}
+      defaultSize={20}
+      minSize={12}
+      className="pane pane--soft"
+    >
+      {searchOpen ? <SearchPane /> : <FileExplorer />}
+    </Panel>
+  )
+  const editorPanel = (
+    <Panel
+      key="editor"
+      id="editor"
+      order={terminalFirst ? 2 : 1}
+      defaultSize={60}
+      minSize={20}
+      className="pane"
+    >
+      <EditorArea />
+    </Panel>
+  )
+  // collapsible にしてサイズを縮めるだけ。中身（PTY）はマウントしたまま保持する。
+  const terminalPanel = (
+    <Panel
+      key="terminal"
+      id="terminal"
+      order={terminalFirst ? 1 : 2}
+      ref={terminalPanelRef}
+      defaultSize={40}
+      minSize={15}
+      collapsible
+      collapsedSize={collapsedSize}
+      onCollapse={() => {
+        setTerminalCollapsed(true)
+        localStorage.setItem(collapsedKey(root), 'true')
+      }}
+      onExpand={() => {
+        setTerminalCollapsed(false)
+        localStorage.setItem(collapsedKey(root), 'false')
+      }}
+      className="pane pane--soft"
+    >
+      <TerminalPane
+        collapsed={terminalCollapsed}
+        onToggle={toggleTerminal}
+        layout={layout}
+        terminalFirst={terminalFirst}
+      />
+    </Panel>
+  )
+
   return (
     <div className="app">
       {/* タブストリップ（タイトルバー）はクロームシェル側に移したため、ここでは描画しない。
@@ -275,52 +377,39 @@ function App(): JSX.Element {
           onSelect={(v) => (v === 'search' ? openSearch() : closeSearch())}
         />
         <PanelGroup
+          ref={outerGroupRef}
           key={`outer-${rootKey}`}
           direction="horizontal"
           autoSaveId={`outer-layout:${rootKey}`}
+          onLayout={onOuterLayout}
         >
-          {/* 左ペインは検索表示中だけ SearchPane に差し替える（幅・分割はそのまま）。 */}
-          <Panel defaultSize={20} minSize={12} className="pane pane--soft">
-            {searchOpen ? <SearchPane /> : <FileExplorer />}
-          </Panel>
-          <PanelResizeHandle className="resize-handle" />
-          <Panel defaultSize={80} minSize={30}>
+          {/* 左右の並びは設定（explorerSide）で決まる。DOM 順と order を揃え、
+              同じ key のまま並べ替えるので子（Terminal の PTY）は再マウントされない。 */}
+          {explorerSide === 'left' && explorerPanel}
+          {explorerSide === 'left' && <PanelResizeHandle className="resize-handle" />}
+          <Panel id="work" order={explorerSide === 'left' ? 2 : 1} defaultSize={80} minSize={30}>
             {/* Editor と Terminal は内側の PanelGroup でまとめ、方向だけを切り替える。
                 key を付けて再マウントすると Terminal の PTY が破棄されてしまうため、
                 direction prop の変更だけで切り替える（v2 は再マウント不要。サイズは % で保持され方向を変えても崩れない）。
                 ヘッダー相当 % を実測するため PanelGroup を div でラップして寸法を測る。 */}
             <div className="work-area" ref={workRef}>
-              <PanelGroup direction={layout} autoSaveId={`work-layout:${rootKey}`} className="work-group">
-                <Panel defaultSize={60} minSize={20} className="pane">
-                  <EditorArea />
-                </Panel>
-                <PanelResizeHandle className="resize-handle" />
-                {/* collapsible にしてサイズを縮めるだけ。中身（PTY）はマウントしたまま保持する。 */}
-                <Panel
-                  ref={terminalPanelRef}
-                  defaultSize={40}
-                  minSize={15}
-                  collapsible
-                  collapsedSize={collapsedSize}
-                  onCollapse={() => {
-                    setTerminalCollapsed(true)
-                    localStorage.setItem(collapsedKey(root), 'true')
-                  }}
-                  onExpand={() => {
-                    setTerminalCollapsed(false)
-                    localStorage.setItem(collapsedKey(root), 'false')
-                  }}
-                  className="pane pane--soft"
-                >
-                  <TerminalPane
-                    collapsed={terminalCollapsed}
-                    onToggle={toggleTerminal}
-                    layout={layout}
-                  />
-                </Panel>
+              <PanelGroup
+                ref={workGroupRef}
+                direction={layout}
+                autoSaveId={`work-layout:${rootKey}`}
+                className="work-group"
+                onLayout={onWorkLayout}
+              >
+                {!terminalFirst && editorPanel}
+                {!terminalFirst && <PanelResizeHandle className="resize-handle" />}
+                {terminalPanel}
+                {terminalFirst && <PanelResizeHandle className="resize-handle" />}
+                {terminalFirst && editorPanel}
               </PanelGroup>
             </div>
           </Panel>
+          {explorerSide === 'right' && <PanelResizeHandle className="resize-handle" />}
+          {explorerSide === 'right' && explorerPanel}
         </PanelGroup>
       </div>
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />

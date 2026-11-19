@@ -5,7 +5,9 @@ import {
   IpcChannel,
   DEFAULT_QUICK_PROMPTS,
   DEFAULT_WATCH_IGNORED_DIRS,
+  DEFAULT_PANE_ARRANGEMENT,
   type AppSettings,
+  type PaneArrangement,
   type QuickPrompt
 } from '../shared/ipc'
 
@@ -35,7 +37,20 @@ function normalize(parsed: unknown): AppSettings {
   const obj = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
   return {
     quickPrompts: normalizeQuickPrompts(obj.quickPrompts),
-    watchIgnoredDirs: normalizeWatchIgnoredDirs(obj.watchIgnoredDirs)
+    watchIgnoredDirs: normalizeWatchIgnoredDirs(obj.watchIgnoredDirs),
+    paneArrangement: normalizePaneArrangement(obj.paneArrangement)
+  }
+}
+
+// ペイン配置を正規化する。不正値・欠損はデフォルト（従来の配置）に倒す。
+function normalizePaneArrangement(value: unknown): PaneArrangement {
+  const obj = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  return {
+    explorerSide: obj.explorerSide === 'right' ? 'right' : DEFAULT_PANE_ARRANGEMENT.explorerSide,
+    terminalFirst:
+      typeof obj.terminalFirst === 'boolean'
+        ? obj.terminalFirst
+        : DEFAULT_PANE_ARRANGEMENT.terminalFirst
   }
 }
 

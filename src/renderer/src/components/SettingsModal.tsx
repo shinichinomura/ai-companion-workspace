@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import {
   DEFAULT_QUICK_PROMPTS,
   DEFAULT_WATCH_IGNORED_DIRS,
+  DEFAULT_PANE_ARRANGEMENT,
+  type PaneArrangement,
   type QuickPrompt
 } from '../../../shared/ipc'
 import { useSettingsStore } from '../store/settings'
@@ -37,19 +39,23 @@ function newPrompt(): QuickPrompt {
 function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | null {
   const quickPrompts = useSettingsStore((s) => s.quickPrompts)
   const watchIgnoredDirs = useSettingsStore((s) => s.watchIgnoredDirs)
+  const paneArrangement = useSettingsStore((s) => s.paneArrangement)
   const save = useSettingsStore((s) => s.save)
 
   // 編集用のローカル状態。モーダルを開くたびにストアの現在値で初期化する（キャンセルで破棄できる）。
   const [prompts, setPrompts] = useState<QuickPrompt[]>([])
   // 監視除外フォルダは 1 行 1 フォルダ名のテキストとして編集する。
   const [watchDirsText, setWatchDirsText] = useState('')
+  // ペイン配置（ファイルツリーの左右・ターミナルの前後）。
+  const [arrangement, setArrangement] = useState<PaneArrangement>(DEFAULT_PANE_ARRANGEMENT)
 
   useEffect(() => {
     if (open) {
       setPrompts(quickPrompts.map((q) => ({ ...q })))
       setWatchDirsText(watchIgnoredDirs.join('\n'))
+      setArrangement({ ...paneArrangement })
     }
-  }, [open, quickPrompts, watchIgnoredDirs])
+  }, [open, quickPrompts, watchIgnoredDirs, paneArrangement])
 
   // Esc で閉じる。
   useEffect(() => {
@@ -88,7 +94,11 @@ function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | nul
   const handleSave = async (): Promise<void> => {
     // ラベルもプロンプトも空の行は捨てる（main 側でも同様に正規化される）。
     const cleaned = prompts.filter((p) => p.label.trim() || p.prompt.trim())
-    await save({ quickPrompts: cleaned, watchIgnoredDirs: parseWatchDirs(watchDirsText) })
+    await save({
+      quickPrompts: cleaned,
+      watchIgnoredDirs: parseWatchDirs(watchDirsText),
+      paneArrangement: arrangement
+    })
     onClose()
   }
 
@@ -116,6 +126,56 @@ function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | nul
         </div>
 
         <div className="settings-body">
+          <section className="settings-section">
+            <h3 className="settings-section-title">ペインの配置</h3>
+            <p className="settings-section-desc">
+              ファイルツリー・エディタ・ターミナルの並び順を選びます。保存すると操作中のタブにすぐ
+              反映されます（他のタブはアプリの再起動後に反映）。エディタとターミナルを左右に並べるか
+              上下に並べるかは、メニューの「表示」で切り替えます。
+            </p>
+            <div className="pane-arrangement-preview" aria-hidden="true">
+              <div className={`pane-preview-row${arrangement.explorerSide === 'right' ? ' reversed' : ''}`}>
+                <div className="pane-preview-cell pane-preview-explorer">ファイルツリー</div>
+                <div className={`pane-preview-work${arrangement.terminalFirst ? ' reversed' : ''}`}>
+                  <div className="pane-preview-cell">エディタ</div>
+                  <div className="pane-preview-cell">ターミナル</div>
+                </div>
+              </div>
+            </div>
+            <div className="pane-arrangement-options">
+              <label>
+                ファイルツリーの位置：
+                <select
+                  value={arrangement.explorerSide}
+                  onChange={(e) =>
+                    setArrangement((a) => ({
+                      ...a,
+                      explorerSide: e.target.value === 'right' ? 'right' : 'left'
+                    }))
+                  }
+                >
+                  <option value="left">左</option>
+                  <option value="right">右</option>
+                </select>
+              </label>
+              <label>
+                ターミナルの位置：
+                <select
+                  value={arrangement.terminalFirst ? 'first' : 'last'}
+                  onChange={(e) =>
+                    setArrangement((a) => ({ ...a, terminalFirst: e.target.value === 'first' }))
+                  }
+                >
+                  <option value="last">エディタの後ろ（右 / 下）</option>
+                  <option value="first">エディタの前（左 / 上）</option>
+                </select>
+              </label>
+              <button type="button" onClick={() => setArrangement({ ...DEFAULT_PANE_ARRANGEMENT })}>
+                デフォルトに戻す
+              </button>
+            </div>
+          </section>
+
           <section className="settings-section">
             <h3 className="settings-section-title">ターミナルのクイック操作</h3>
             <p className="settings-section-desc">
