@@ -232,6 +232,8 @@ async function openFileInternal(
       files: pruneFiles({ ...state.files, [relPath]: opened }, tabs),
       tabs,
       activeTabId: target.tabId,
+      // 復元による自動オープンではペインを開き直さない。
+      fileOpenSeq: restore ? state.fileOpenSeq : state.fileOpenSeq + 1,
       // テキストとして開けたときだけジャンプ指示を積む（バイナリは reveal しない）。
       // reveal 指定の無い通常のオープンでは null にクリアする。そうしないと、以前検索から
       // ジャンプしたファイルを後で普通に開き直した際に、古い位置へ誤ってジャンプしてしまう。
@@ -426,6 +428,10 @@ interface WorkspaceState {
   // 展開中のディレクトリ relPath の集合。
   expandedDirs: Set<string>
 
+  // ユーザー操作でファイルを開くたびに増える連番。エディタペインを閉じている間に
+  // ファイルツリー等からファイルを開いたとき、App がこれを見てペインを再表示する。
+  fileOpenSeq: number
+
   // 開いているファイルのバッファ（relPath → 内容）。複数のタブが同じファイルを指しても 1 つを共有する。
   files: Record<string, OpenFile>
 
@@ -524,6 +530,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   childrenByDir: {},
   expandedDirs: new Set(),
   ...freshEditorState(),
+  fileOpenSeq: 0,
   recentFolders: [],
   recentFiles: [],
   bookmarks: [],

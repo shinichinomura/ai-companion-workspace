@@ -68,6 +68,15 @@ function loadLayout(root: string | null): WorkLayout {
   return localStorage.getItem(layoutKey(root)) === 'vertical' ? 'vertical' : 'horizontal'
 }
 
+function editorCollapsedKey(root: string | null): string {
+  return `editor-collapsed:${root ?? '__none__'}`
+}
+
+// localStorage から、指定 root のエディタペインの閉じ状態を復元する。
+function loadEditorCollapsed(root: string | null): boolean {
+  return localStorage.getItem(editorCollapsedKey(root)) === 'true'
+}
+
 // localStorage から、指定 root のターミナル折りたたみ状態を復元する。
 function loadCollapsed(root: string | null): boolean {
   return localStorage.getItem(collapsedKey(root)) === 'true'
@@ -111,6 +120,10 @@ function App(): JSX.Element {
   // 何 % になるかを実測して求める。
   const [collapsedSize, setCollapsedSize] = useState(6)
   const terminalPanelRef = useRef<ImperativePanelHandle>(null)
+  // エディタペインの閉じ状態。サイズ 0 まで畳む（ヘッダーも残さない）。
+  // ファイルツリー等からファイルを開くと自動で再表示する。
+  const [editorCollapsed, setEditorCollapsed] = useState(() => loadEditorCollapsed(null))
+  const editorPanelRef = useRef<ImperativePanelHandle>(null)
   const workRef = useRef<HTMLDivElement>(null)
   // 配置変更時にサイズを入れ替えるため、内側の PanelGroup を命令的に操作できるようにする。
   const workGroupRef = useRef<ImperativePanelGroupHandle>(null)
@@ -186,12 +199,54 @@ function App(): JSX.Element {
   }, [terminalFirst])
 
   // ヘッダーのアイコンから呼ぶ開閉トグル。
+  // エディタが閉じているときにターミナルまで畳むと作業領域が空になるため、エディタを再表示する。
   const toggleTerminal = (): void => {
     const panel = terminalPanelRef.current
     if (!panel) return
     if (panel.isCollapsed()) panel.expand()
-    else panel.collapse()
+    else {
+      panel.collapse()
+      editorPanelRef.current?.expand()
+    }
   }
+
+  // エディタペインを閉じる / 開く。ターミナルが畳まれているときに閉じると作業領域が空になるため、
+  // ターミナルを先に展開する。
+  const toggleEditor = (): void => {
+    const panel = editorPanelRef.current
+    if (!panel) return
+    if (panel.isCollapsed()) panel.expand()
+    else {
+      terminalPanelRef.current?.expand()
+      panel.collapse()
+    }
+  }
+  const toggleEditorRef = useRef(toggleEditor)
+  toggleEditorRef.current = toggleEditor
+  const closeEditor = (): void => {
+    if (!editorPanelRef.current?.isCollapsed()) toggleEditor()
+  }
+
+  // 「表示」メニューの「エディタの表示を切り替え」（⌥⌘E）。
+  useEffect(() => {
+    const unsubscribe = window.api.onToggleEditor(() => toggleEditorRef.current())
+    return unsubscribe
+  }, [])
+
+  // ファイルを開いたとき（ファイルツリー・検索結果・リンクなど）、エディタが閉じていれば再表示する。
+  // 起動直後の値では反応しないよう、前回の連番と比べる。
+  const fileOpenSeq = useWorkspaceStore((s) => s.fileOpenSeq)
+  const prevFileOpenSeqRef = useRef(fileOpenSeq)
+  useEffect(() => {
+    if (prevFileOpenSeqRef.current === fileOpenSeq) return
+    prevFileOpenSeqRef.current = fileOpenSeq
+    if (editorPanelRef.current?.isCollapsed()) editorPanelRef.current.expand()
+  }, [fileOpenSeq])
+
+  // 保存済みの「閉じ」状態を、マウント・root 切替後にパネルへ反映する。
+  useEffect(() => {
+    if (editorCollapsed) editorPanelRef.current?.collapse()
+  }, [editorCollapsed, root])
 
   // root（開いているプロジェクト）が変わったら、そのプロジェクトの UI 設定を読み直し、
   // レイアウトの現在値を main に通知してメニューのチェックを同期する。
@@ -199,6 +254,7 @@ function App(): JSX.Element {
     const nextLayout = loadLayout(root)
     setLayout(nextLayout)
     setTerminalCollapsed(loadCollapsed(root))
+    setEditorCollapsed(loadEditorCollapsed(root))
     window.api.reportWorkLayout(nextLayout)
   }, [root])
 
@@ -307,11 +363,22 @@ function App(): JSX.Element {
       key="editor"
       id="editor"
       order={terminalFirst ? 2 : 1}
+      ref={editorPanelRef}
       defaultSize={60}
       minSize={20}
+      collapsible
+      collapsedSize={0}
+      onCollapse={() => {
+        setEditorCollapsed(true)
+        localStorage.setItem(editorCollapsedKey(root), 'true')
+      }}
+      onExpand={() => {
+        setEditorCollapsed(false)
+        localStorage.setItem(editorCollapsedKey(root), 'false')
+      }}
       className="pane"
     >
-      <EditorArea />
+      <EditorArea onClose={closeEditor} />
     </Panel>
   )
   // collapsible にしてサイズを縮めるだけ。中身（PTY）はマウントしたまま保持する。

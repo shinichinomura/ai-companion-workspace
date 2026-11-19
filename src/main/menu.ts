@@ -92,6 +92,11 @@ function openSettings(): void {
   getActiveTabWebContents()?.send(IpcChannel.OpenSettings)
 }
 
+// 「エディタの表示を切り替え」が選ばれたら、アクティブタブの renderer に通知する。
+function requestToggleEditor(): void {
+  getActiveTabWebContents()?.send(IpcChannel.ToggleEditor)
+}
+
 // 「ファイル内を検索…」（⇧⌘F）が選ばれたら、アクティブタブの renderer に通知する。
 // 検索ペインは renderer 側で開き、入力欄にフォーカスする。
 function requestOpenSearch(): void {
@@ -212,6 +217,11 @@ export function buildAppMenu(): void {
           type: 'radio',
           checked: currentLayout === 'vertical',
           click: () => requestLayout('vertical')
+        },
+        {
+          label: 'エディタの表示を切り替え',
+          accelerator: 'CmdOrCtrl+Alt+E',
+          click: () => requestToggleEditor()
         },
         { type: 'separator' },
         { role: 'reload' },

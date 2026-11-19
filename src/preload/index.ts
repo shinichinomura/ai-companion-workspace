@@ -97,6 +97,11 @@ const api: WorkspaceApi = {
     ipcRenderer.on(IpcChannel.OpenSettings, listener)
     return () => ipcRenderer.removeListener(IpcChannel.OpenSettings, listener)
   },
+  onToggleEditor: (cb: () => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IpcChannel.ToggleEditor, listener)
+    return () => ipcRenderer.removeListener(IpcChannel.ToggleEditor, listener)
+  },
   onOpenSearch: (cb: () => void) => {
     const listener = (): void => cb()
     ipcRenderer.on(IpcChannel.OpenSearch, listener)

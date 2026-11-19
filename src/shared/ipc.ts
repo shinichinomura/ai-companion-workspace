@@ -53,6 +53,8 @@ export const IpcChannel = {
   OpenSettings: 'view:open-settings',
   // M→R push: 「編集」メニューの「ファイル内を検索…」（⇧⌘F）が選ばれた。renderer は検索ペインを開く。
   OpenSearch: 'view:open-search',
+  // M→R push: 「表示」メニューの「エディタの表示を切り替え」が選ばれた。renderer はエディタペインを開閉する。
+  ToggleEditor: 'view:toggle-editor',
 
   // アプリ設定（設定画面）。userData の app-settings.json に永続化する。
   SettingsGet: 'settings:get', // R→M invoke: 現在のアプリ設定を取得する
@@ -542,6 +544,7 @@ export interface WorkspaceApi {
   onOpenSettings: (cb: () => void) => () => void
   // 「ファイル内を検索…」（⇧⌘F）が選ばれたら通知を受ける。返り値は購読解除関数。
   onOpenSearch: (cb: () => void) => () => void
+  onToggleEditor: (cb: () => void) => () => void
 
   // 現在のアプリ設定を取得する。
   getAppSettings: () => Promise<AppSettings>

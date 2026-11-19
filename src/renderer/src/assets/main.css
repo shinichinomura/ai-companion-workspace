@@ -2330,3 +2330,22 @@ body {
   color: var(--fg);
   background: #333;
 }
+
+/* エディタペインを隠すボタン。ヘッダーの右端に置く。 */
+.pane-header > .pane-close-btn {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pane-close-btn:hover {
+  background: #333;
+  color: var(--fg);
+}

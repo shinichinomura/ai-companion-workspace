@@ -6,7 +6,7 @@ import EditorPane from './EditorPane'
 // タブバーが現れて切り替えられる。
 // 非アクティブなタブもマウントしたまま隠す。表示モード（Edit/Preview）・スクロール・
 // カーソル・undo 履歴・未保存の編集を、切り替えても保つため。
-function EditorArea(): JSX.Element {
+function EditorArea({ onClose }: { onClose: () => void }): JSX.Element {
   const tabs = useWorkspaceStore((s) => s.tabs)
   const files = useWorkspaceStore((s) => s.files)
   const activeTabId = useWorkspaceStore((s) => s.activeTabId)
@@ -66,7 +66,7 @@ function EditorArea(): JSX.Element {
             key={tab.id}
             className={`editor-tab-body${tab.id === activeTabId ? ' active' : ''}`}
           >
-            <EditorPane tabId={tab.id} />
+            <EditorPane tabId={tab.id} onClose={onClose} />
           </div>
         ))}
       </div>

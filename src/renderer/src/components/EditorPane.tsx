@@ -30,7 +30,7 @@ const TOC_OPEN_KEY = 'md-toc-open'
 // 1 つのエディタタブの中身（1 ファイル分）で、Edit / Preview などの表示モードや目次の状態は
 // タブごとに独立して持つ。タブの切り替えは EditorArea が行い、非アクティブなタブも
 // マウントしたまま隠す（スクロール位置・カーソル・undo・表示モードを保つ）。
-function EditorPane({ tabId }: { tabId: string }): JSX.Element {
+function EditorPane({ tabId, onClose }: { tabId: string; onClose: () => void }): JSX.Element {
   const tab = useWorkspaceStore((s) => s.tabs.find((t) => t.id === tabId))
   const activeFile = useWorkspaceStore((s) => (tab?.relPath ? (s.files[tab.relPath] ?? null) : null))
   const pendingReveal = useWorkspaceStore((s) => s.pendingReveal)
@@ -200,6 +200,15 @@ function EditorPane({ tabId }: { tabId: string }): JSX.Element {
         ) : (
           'Editor'
         )}
+        {/* ペインを隠す。ファイルツリーからファイルを開くと再表示される（⌥⌘E でも切り替え可）。 */}
+        <button
+          className="pane-close-btn"
+          onClick={onClose}
+          title="エディタを閉じる（ファイルを開くと再表示）"
+          aria-label="エディタを閉じる"
+        >
+          ✕
+        </button>
       </div>
       {activeFile?.externallyChanged && (
         <div className="conflict-banner">
