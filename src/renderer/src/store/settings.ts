@@ -16,7 +16,7 @@ interface SettingsState {
   quickPrompts: QuickPrompt[]
   // ファイル監視から除外するフォルダ名（fd 枯渇対策）。
   watchIgnoredDirs: string[]
-  // ペインの配置（ファイルツリーの左右・ターミナルの前後）。
+  // ペインの配置（ターミナルの前後）。
   paneArrangement: PaneArrangement
   // main からの読み込みが完了したか。
   loaded: boolean

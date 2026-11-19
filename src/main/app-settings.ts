@@ -46,7 +46,6 @@ function normalize(parsed: unknown): AppSettings {
 function normalizePaneArrangement(value: unknown): PaneArrangement {
   const obj = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
   return {
-    explorerSide: obj.explorerSide === 'right' ? 'right' : DEFAULT_PANE_ARRANGEMENT.explorerSide,
     terminalFirst:
       typeof obj.terminalFirst === 'boolean'
         ? obj.terminalFirst

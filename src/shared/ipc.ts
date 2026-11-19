@@ -132,18 +132,14 @@ export interface TabsState {
 export type WorkLayout = 'horizontal' | 'vertical'
 
 // ペインの配置（列位置）のカスタマイズ。
-// PTY を壊さないため、構造は「Explorer | (Editor, Terminal)」の入れ子のまま保ち、
-// Explorer を左右どちらに置くか・Terminal を Editor の前（左/上）に置くかだけを切り替える。
+// ファイルツリー（検索ペイン含む）は常に左端に固定し、Terminal を Editor の前後どちらに置くかだけを切り替える。
 export interface PaneArrangement {
-  // ファイルツリー（検索ペイン含む）を作業エリアの左右どちらに置くか。
-  explorerSide: 'left' | 'right'
   // true ならターミナルをエディタの前（左右並びなら左、上下並びなら上）に置く。
   terminalFirst: boolean
 }
 
-// ペイン配置の初期値（従来どおり: 左に Explorer、Editor の後ろに Terminal）。
+// ペイン配置の初期値（従来どおり: Editor の後ろに Terminal）。
 export const DEFAULT_PANE_ARRANGEMENT: PaneArrangement = {
-  explorerSide: 'left',
   terminalFirst: false
 }
 
@@ -166,7 +162,7 @@ export interface AppSettings {
   // つき fd を 1 つ使うため、.venv のような大量ファイルを含むフォルダを監視すると fd が枯渇し、
   // 新しいターミナルが起動できず即終了する（[プロセスが終了しました (code 0)]）。
   watchIgnoredDirs: string[]
-  // ペインの配置（ファイルツリーの左右・ターミナルの前後）。
+  // ペインの配置（ターミナルの前後）。
   paneArrangement: PaneArrangement
 }
 

@@ -129,12 +129,12 @@ function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | nul
           <section className="settings-section">
             <h3 className="settings-section-title">ペインの配置</h3>
             <p className="settings-section-desc">
-              ファイルツリー・エディタ・ターミナルの並び順を選びます。保存すると操作中のタブにすぐ
+              ファイルツリーは左端に固定です。エディタに対するターミナルの位置を選びます。保存すると操作中のタブにすぐ
               反映されます（他のタブはアプリの再起動後に反映）。エディタとターミナルを左右に並べるか
               上下に並べるかは、メニューの「表示」で切り替えます。
             </p>
             <div className="pane-arrangement-preview" aria-hidden="true">
-              <div className={`pane-preview-row${arrangement.explorerSide === 'right' ? ' reversed' : ''}`}>
+              <div className="pane-preview-row">
                 <div className="pane-preview-cell pane-preview-explorer">ファイルツリー</div>
                 <div className={`pane-preview-work${arrangement.terminalFirst ? ' reversed' : ''}`}>
                   <div className="pane-preview-cell">エディタ</div>
@@ -143,21 +143,6 @@ function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | nul
               </div>
             </div>
             <div className="pane-arrangement-options">
-              <label>
-                ファイルツリーの位置：
-                <select
-                  value={arrangement.explorerSide}
-                  onChange={(e) =>
-                    setArrangement((a) => ({
-                      ...a,
-                      explorerSide: e.target.value === 'right' ? 'right' : 'left'
-                    }))
-                  }
-                >
-                  <option value="left">左</option>
-                  <option value="right">右</option>
-                </select>
-              </label>
               <label>
                 ターミナルの位置：
                 <select
