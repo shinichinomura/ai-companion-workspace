@@ -148,7 +148,9 @@ const api: WorkspaceApi = {
   requestTabsState: () => ipcRenderer.send(IpcChannel.TabsRequestState),
   newTab: () => ipcRenderer.send(IpcChannel.TabNew),
   activateTab: (id: number) => ipcRenderer.send(IpcChannel.TabActivate, id),
-  closeTab: (id: number) => ipcRenderer.send(IpcChannel.TabClose, id)
+  closeTab: (id: number) => ipcRenderer.send(IpcChannel.TabClose, id),
+  reorderTab: (id: number, toIndex: number) =>
+    ipcRenderer.send(IpcChannel.TabReorder, id, toIndex)
 }
 
 // contextIsolation が有効なため、contextBridge 経由でのみ公開する。

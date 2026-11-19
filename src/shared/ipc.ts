@@ -69,6 +69,8 @@ export const IpcChannel = {
   TabActivate: 'tabs:activate',
   // shell→M send: 指定タブを閉じる。
   TabClose: 'tabs:close',
+  // shell→M send: 指定タブを並び順の toIndex 番目（取り除いた後の配列での位置）へ移動する。
+  TabReorder: 'tabs:reorder',
 
   // 統合ターミナル（spec 2.2.4）。1 タブ（webContents）内に複数のターミナルをタブで持てる。
   // PTY は (webContents.id, terminalId) の組で一意に保持する。terminalId は各メッセージに含める。
@@ -578,4 +580,6 @@ export interface WorkspaceApi {
   activateTab: (id: number) => void
   // 指定タブを閉じる。
   closeTab: (id: number) => void
+  // 指定タブを toIndex 番目（そのタブを取り除いた後の配列での位置）へ移動する。
+  reorderTab: (id: number, toIndex: number) => void
 }

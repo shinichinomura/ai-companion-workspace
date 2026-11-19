@@ -115,6 +115,19 @@ function activateTab(id: number): void {
   persistSession()
 }
 
+// タブの表示順を入れ替える。toIndex は対象タブを取り除いた後の配列での挿入位置。
+// 順序はセッションに保存し、再起動後も保つ。ビューの表示・アクティブは変えない。
+function reorderTab(id: number, toIndex: number): void {
+  const from = tabs.findIndex((t) => t.id === id)
+  if (from === -1 || !Number.isInteger(toIndex)) return
+  const to = Math.max(0, Math.min(tabs.length - 1, toIndex))
+  if (to === from) return
+  const [tab] = tabs.splice(from, 1)
+  tabs.splice(to, 0, tab)
+  notifyShell()
+  persistSession()
+}
+
 // 新しいタブを作成する。
 // opts.restore=true なら前回フォルダを自動復元（初期タブ）。root 指定で特定フォルダを開く。
 function createTab(opts: { restore?: boolean; root?: string } = {}): Tab {
@@ -434,6 +447,7 @@ export function registerTabHandlers(): void {
   ipcMain.on(IpcChannel.TabNew, () => createTab())
   ipcMain.on(IpcChannel.TabActivate, (_e, id: number) => activateTab(id))
   ipcMain.on(IpcChannel.TabClose, (_e, id: number) => closeTab(id))
+  ipcMain.on(IpcChannel.TabReorder, (_e, id: number, toIndex: number) => reorderTab(id, toIndex))
   // 送信元タブ（e.sender.id）でベルが鳴った。今まさに見ているターミナル以外は OS 通知を出す。
   ipcMain.on(IpcChannel.TerminalBell, (e, msg: TerminalBellMessage) =>
     handleTerminalBell(e.sender.id, msg.id, msg.label)

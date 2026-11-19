@@ -83,6 +83,33 @@ body {
   background: var(--bg-pane);
 }
 
+/* ドラッグ並べ替え中: 動かしているタブは薄くし、挿入位置にアクセント色の線を出す。 */
+.tab {
+  position: relative;
+}
+
+.tab.dragging {
+  opacity: 0.4;
+}
+
+.tab.drop-before::before,
+.tab.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
+
+.tab.drop-before::before {
+  left: -1px;
+}
+
+.tab.drop-after::after {
+  right: -1px;
+}
+
 .tab.active {
   background: var(--bg);
   color: var(--fg);

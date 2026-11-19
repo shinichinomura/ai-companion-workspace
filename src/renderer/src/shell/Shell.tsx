@@ -6,6 +6,24 @@ import { APP_VERSION, buildDetail } from '../../../shared/build-info'
 // タブの状態（一覧・アクティブ）は main が真値として持ち、tabs:state push で受け取る。
 function Shell(): JSX.Element {
   const [state, setState] = useState<TabsState>({ tabs: [], activeId: null })
+  // ドラッグ中のタブ id と、挿入位置（タブ間の隙間の番号 0..tabs.length）。
+  const [dragId, setDragId] = useState<number | null>(null)
+  const [gap, setGap] = useState<number | null>(null)
+
+  const endDrag = (): void => {
+    setDragId(null)
+    setGap(null)
+  }
+
+  // 隙間番号を「ドラッグ元を取り除いた後の位置」に直して main に並べ替えを依頼する。
+  const dropAt = (g: number): void => {
+    const from = state.tabs.findIndex((t) => t.id === dragId)
+    if (from !== -1) {
+      const to = g > from ? g - 1 : g
+      if (to !== from) window.api.reorderTab(state.tabs[from].id, to)
+    }
+    endDrag()
+  }
 
   useEffect(() => {
     // main からのタブ状態更新を購読する。マウント時に現在状態を要求する。
@@ -17,11 +35,41 @@ function Shell(): JSX.Element {
   return (
     <div className="tabbar">
       <div className="tabs">
-        {state.tabs.map((tab) => (
+        {state.tabs.map((tab, i) => (
           <div
             key={tab.id}
-            className={tab.id === state.activeId ? 'tab active' : 'tab'}
+            className={[
+              'tab',
+              tab.id === state.activeId ? 'active' : '',
+              tab.id === dragId ? 'dragging' : '',
+              gap === i && dragId !== null ? 'drop-before' : '',
+              gap === i + 1 && i === state.tabs.length - 1 && dragId !== null ? 'drop-after' : ''
+            ]
+              .filter(Boolean)
+              .join(' ')}
             title={tab.title}
+            draggable
+            onDragStart={(e) => {
+              setDragId(tab.id)
+              e.dataTransfer.effectAllowed = 'move'
+              // 他アプリへのドロップで意味を持たないよう、識別用の最小データだけ載せる。
+              e.dataTransfer.setData('text/plain', tab.title)
+            }}
+            onDragOver={(e) => {
+              if (dragId === null) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+              // カーソルがタブの左半分なら手前、右半分なら後ろに挿入する。
+              const rect = e.currentTarget.getBoundingClientRect()
+              const g = e.clientX < rect.left + rect.width / 2 ? i : i + 1
+              if (g !== gap) setGap(g)
+            }}
+            onDrop={(e) => {
+              if (dragId === null || gap === null) return
+              e.preventDefault()
+              dropAt(gap)
+            }}
+            onDragEnd={endDrag}
             onMouseDown={(e) => {
               // 中クリックでタブを閉じる（最後の 1 枚は閉じない）。
               if (e.button === 1 && state.tabs.length > 1) {
