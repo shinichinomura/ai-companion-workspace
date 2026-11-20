@@ -48,6 +48,7 @@ import {
   setBookmarks
 } from './bookmarks'
 import { startGitWatching, stopGitWatching } from './git'
+import { isCloudSyncedPath, startCloudPolling, type CloudPoller } from './cloud-poller'
 
 // 初期 ignore 対象のディレクトリ名（spec 4.2 / 5.6）。ファイルツリー表示から隠す。
 const IGNORED_DIRS = new Set([
@@ -133,12 +134,19 @@ interface WatchState {
   watcher: FSWatcher | null
   // このタブが消費している監視対象数（事前スキャンの結果）。全タブ合計の予算管理に使う。
   watchedCount: number
+  // クラウド同期フォルダ（Dropbox 等）用の定期スキャン。通常フォルダでは null。
+  // File Provider 経由の同期変更は fs.watch に載らないことがあるため、その補完として使う。
+  poller: CloudPoller | null
+  // watcher が直近に通知したパス（絶対パス → 時刻）。poller が同じ変更を二重通知しないための抑制用。
+  recentWatcherEvents: Map<string, number>
   // debounce 用バッファとタイマー（spec 2.2.5 の near real-time）。
   pending: FsChange[]
   flushTimer: NodeJS.Timeout | null
 }
 
 const FS_EVENT_DEBOUNCE_MS = 150
+// watcher が通知したパスを poller の重複抑制に使う期間。poller の最長スキャン間隔より長めにとる。
+const WATCHER_EVENT_SUPPRESS_MS = 15000
 
 // webContents.id → 開いている project root（絶対パス）。
 const rootByWcId = new Map<number, string>()
@@ -188,6 +196,36 @@ function enqueueChange(wcId: number, kind: FsChangeKind, absPath: string): void 
   }
 }
 
+// chokidar からの変更を積む。poller との重複抑制のため、通知したパスと時刻を記録する。
+function enqueueWatcherChange(wcId: number, kind: FsChangeKind, absPath: string): void {
+  const state = watchByWcId.get(wcId)
+  if (!state) return
+  state.recentWatcherEvents.set(absPath, Date.now())
+  enqueueChange(wcId, kind, absPath)
+}
+
+// poller からの変更を積む。watcher が直近に同じパスを通知済みなら二重通知しない。
+function enqueuePolledChange(wcId: number, kind: FsChangeKind, absPath: string): void {
+  const state = watchByWcId.get(wcId)
+  if (!state) return
+  const now = Date.now()
+  for (const [p, t] of state.recentWatcherEvents) {
+    if (now - t > WATCHER_EVENT_SUPPRESS_MS) state.recentWatcherEvents.delete(p)
+  }
+  if (state.recentWatcherEvents.has(absPath)) return
+  enqueueChange(wcId, kind, absPath)
+}
+
+// クラウド同期フォルダなら定期スキャンを開始する。
+function startPollerIfCloud(wcId: number, state: WatchState): void {
+  if (!isCloudSyncedPath(state.root)) return
+  state.poller = startCloudPolling(
+    state.root,
+    (name) => watchIgnoredDirs.has(name),
+    (kind, abs) => enqueuePolledChange(wcId, kind, abs)
+  )
+}
+
 // file watcher の稼働状態を該当タブの renderer に通知する（監視停止バナーの表示・解除用）。
 function sendWatchStatus(target: WebContents, status: WatchStatus): void {
   if (!target.isDestroyed()) {
@@ -206,6 +244,8 @@ async function startWatching(root: string, target: WebContents): Promise<void> {
     target,
     watcher: null,
     watchedCount: 0,
+    poller: null,
+    recentWatcherEvents: new Map(),
     pending: [],
     flushTimer: null
   }
@@ -222,6 +262,8 @@ async function startWatching(root: string, target: WebContents): Promise<void> {
     // 監視は諦める（ツリー・編集・ターミナルは通常どおり）。.git の監視は対象数が
     // 小さく Git status の追従に必要なため続ける。renderer はバナーで停止を知らせる。
     sendWatchStatus(target, { watching: false, entryCount, limit: budget })
+    // クラウド同期フォルダなら、イベント監視を諦めても定期スキャンで変更は追従する。
+    startPollerIfCloud(wcId, state)
     await startGitWatching(root, target)
     return
   }
@@ -238,11 +280,13 @@ async function startWatching(root: string, target: WebContents): Promise<void> {
     awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
   })
   state.watcher
-    .on('add', (p) => enqueueChange(wcId, 'add', p))
-    .on('change', (p) => enqueueChange(wcId, 'change', p))
-    .on('unlink', (p) => enqueueChange(wcId, 'unlink', p))
-    .on('addDir', (p) => enqueueChange(wcId, 'addDir', p))
-    .on('unlinkDir', (p) => enqueueChange(wcId, 'unlinkDir', p))
+    .on('add', (p) => enqueueWatcherChange(wcId, 'add', p))
+    .on('change', (p) => enqueueWatcherChange(wcId, 'change', p))
+    .on('unlink', (p) => enqueueWatcherChange(wcId, 'unlink', p))
+    .on('addDir', (p) => enqueueWatcherChange(wcId, 'addDir', p))
+    .on('unlinkDir', (p) => enqueueWatcherChange(wcId, 'unlinkDir', p))
+  // Dropbox 等の同期フォルダでは fs.watch が同期経由の変更を取りこぼすため定期スキャンを併用する。
+  startPollerIfCloud(wcId, state)
   // .git（index/HEAD/refs）も監視し、ターミナルでの commit/add 等を Git status に反映する。
   await startGitWatching(root, target)
 }
@@ -256,6 +300,10 @@ async function stopWatching(wcId: number): Promise<void> {
   if (state.flushTimer !== null) {
     clearTimeout(state.flushTimer)
     state.flushTimer = null
+  }
+  if (state.poller) {
+    state.poller.stop()
+    state.poller = null
   }
   if (state.watcher) {
     const w = state.watcher
