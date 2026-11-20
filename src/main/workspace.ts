@@ -275,7 +275,13 @@ async function startWatching(root: string, target: WebContents): Promise<void> {
     ignoreInitial: true,
     // 監視除外ディレクトリはパスセグメント単位で除外する。.venv 等の大量ファイルを
     // 監視すると fd を使い切り、ターミナルが起動できなくなるため広めに除外する（設定で編集可）。
-    ignored: (p: string) => p.split(sep).some((seg) => watchIgnoredDirs.has(seg)),
+    // 判定は root からの相対パスだけで行う。絶対パス全体で見ると、root が ~/Library/CloudStorage/
+    // （Dropbox 等）のように除外名（Library など）を祖先に持つ場合に root ごと除外され、何も監視されない。
+    ignored: (p: string) => {
+      const rel = relative(root, p)
+      if (rel === '' || rel.startsWith('..')) return false
+      return rel.split(sep).some((seg) => watchIgnoredDirs.has(seg))
+    },
     // 保存途中の中間状態を読まないよう、書き込み完了を待ってから通知する。
     awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
   })
