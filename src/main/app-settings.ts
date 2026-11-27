@@ -3,7 +3,6 @@ import { promises as fs } from 'fs'
 import { join } from 'path'
 import {
   IpcChannel,
-  DEFAULT_QUICK_PROMPTS,
   DEFAULT_WATCH_IGNORED_DIRS,
   DEFAULT_PANE_ARRANGEMENT,
   DEFAULT_FONT_SIZES,
@@ -11,8 +10,7 @@ import {
   FONT_SIZE_MAX,
   type AppSettings,
   type FontSizes,
-  type PaneArrangement,
-  type QuickPrompt
+  type PaneArrangement
 } from '../shared/ipc'
 
 // アプリ設定（設定画面）の永続化。
@@ -40,7 +38,6 @@ function settingsFile(): string {
 function normalize(parsed: unknown): AppSettings {
   const obj = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
   return {
-    quickPrompts: normalizeQuickPrompts(obj.quickPrompts),
     watchIgnoredDirs: normalizeWatchIgnoredDirs(obj.watchIgnoredDirs),
     paneArrangement: normalizePaneArrangement(obj.paneArrangement),
     fontSizes: normalizeFontSizes(obj.fontSizes)
@@ -89,24 +86,6 @@ function normalizeWatchIgnoredDirs(value: unknown): string[] {
     seen.add(name)
     result.push(name)
   }
-  return result
-}
-
-// クイック操作配列を正規化する。配列でなければデフォルトに倒す。
-// 配列であれば（空配列も含め）ユーザーの意図として尊重し、各行を検証する。
-function normalizeQuickPrompts(value: unknown): QuickPrompt[] {
-  if (!Array.isArray(value)) return DEFAULT_QUICK_PROMPTS.map((q) => ({ ...q }))
-  const result: QuickPrompt[] = []
-  value.forEach((entry, i) => {
-    if (!entry || typeof entry !== 'object') return
-    const e = entry as Record<string, unknown>
-    const label = typeof e.label === 'string' ? e.label : ''
-    const prompt = typeof e.prompt === 'string' ? e.prompt : ''
-    // ラベルもプロンプトも空の行は無効として捨てる。
-    if (!label.trim() && !prompt.trim()) return
-    const id = typeof e.id === 'string' && e.id ? e.id : `qp-${i}`
-    result.push({ id, label, prompt })
-  })
   return result
 }
 

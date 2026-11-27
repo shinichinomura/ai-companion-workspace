@@ -317,7 +317,7 @@ function App(): JSX.Element {
     return unsubscribe
   }, [setWatchStatus])
 
-  // 起動時にアプリ設定を読み込む（クイック操作のボタン定義など）。
+  // 起動時にアプリ設定を読み込む（監視除外・ペイン配置・フォントサイズなど）。
   useEffect(() => {
     void loadSettings()
   }, [loadSettings])

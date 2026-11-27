@@ -94,7 +94,6 @@ function TerminalPane({
   // よく使う Git 操作のボタン定義（設定画面で編集可能）。押すとアクティブな統合ターミナルへ prompt を送る。
   // 送信先はユーザーが見ている統合ターミナル。Claude が対話モードで起動している前提の
   // ショートカットで、裏でプロンプトを投入するものではない（spec 設計原則）。
-  const quickPrompts = useSettingsStore((s) => s.quickPrompts)
 
   // 前回のタブ構成（マウント時に 1 度だけ読む）。root 変更時は本コンポーネントごと再マウントされる。
   const [saved] = useState(() => loadTerminalLayout(root))
@@ -144,10 +143,6 @@ function TerminalPane({
     }
     setExited((m) => ({ ...m, [id]: ex }))
   }
-
-  // 定型プロンプトのメニューを開いているか。
-  const [promptMenuOpen, setPromptMenuOpen] = useState(false)
-  const promptMenuRef = useRef<HTMLDivElement>(null)
 
   // タブ名のインライン編集状態。id は編集中のタブ、value は入力中の文字列。
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null)
@@ -219,16 +214,6 @@ function TerminalPane({
     })
   }
 
-  // 定型プロンプトをアクティブなターミナルへ送る（末尾に改行 \r を付けて即実行）。
-  // 折りたたみ中なら開いて見せる。
-  const sendPrompt = (prompt: string): void => {
-    if (!root) return
-    if (collapsed) onToggle()
-    const handle = handlesRef.current.get(activeId)
-    handle?.sendText(prompt + '\r')
-    handle?.focus()
-  }
-
   // 指定パスを、アクティブなターミナルの入力欄に `@relPath ` として挿入する。
   // relPath は project root 基準＝claude の起動 cwd 基準なので、そのまま claude の @ 参照に使える。
   // フォルダは claude の慣習に合わせ末尾に `/` を付ける（`@src/components/`）。
@@ -287,23 +272,6 @@ function TerminalPane({
     const unsubscribe = window.api.onTerminalUnread((ids) => setUnreadIds(new Set(ids)))
     return unsubscribe
   }, [])
-
-  // 定型プロンプトのメニューを開いている間は、外側クリックと Escape で閉じる。
-  useEffect(() => {
-    if (!promptMenuOpen) return
-    const onPointerDown = (e: MouseEvent): void => {
-      if (!promptMenuRef.current?.contains(e.target as Node | null)) setPromptMenuOpen(false)
-    }
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setPromptMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [promptMenuOpen])
 
   return (
     <div className="pane-inner">
@@ -426,7 +394,7 @@ function TerminalPane({
 
         {/* 現在開いているファイルを、アクティブなターミナルの入力欄に `@パス` として挿入する。
             改行は付けないため、そのまま claude に渡すかどうかはユーザーが Enter で決める。
-            ファイル未オープン時は無効。ヘッダー右側（定型プロンプトの左隣）に置く。 */}
+            ファイル未オープン時は無効。ヘッダー右側に置く。 */}
         <button
           type="button"
           className="terminal-action-trigger terminal-insert-file"
@@ -445,57 +413,6 @@ function TerminalPane({
           </span>
         </button>
 
-        {/* よく使う Git 操作を Claude に送る定型プロンプト。ヘッダーにはアイコンだけを置き、
-            押すと登録済みの選択肢をメニューとして展開する（設定画面で編集可能）。
-            ラベルが空の行は表示しない。 */}
-        {(() => {
-          const items = quickPrompts.filter((q) => q.label.trim())
-          return (
-            <div className="terminal-actions" ref={promptMenuRef}>
-              <button
-                type="button"
-                className={`terminal-action-trigger${promptMenuOpen ? ' open' : ''}`}
-                onClick={() => setPromptMenuOpen((v) => !v)}
-                disabled={!root || items.length === 0}
-                title="定型プロンプト"
-                aria-label="定型プロンプト"
-                aria-haspopup="menu"
-                aria-expanded={promptMenuOpen}
-              >
-                {/* 稲妻アイコン。「素早く送るショートカット」を表す。 */}
-                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    d="M13 2 L4 14 H11 L11 22 L20 10 H13 Z"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-              {promptMenuOpen && items.length > 0 && (
-                <div className="terminal-action-menu" role="menu">
-                  {items.map((q) => (
-                    <button
-                      key={q.id}
-                      type="button"
-                      role="menuitem"
-                      className="terminal-action-menu-item"
-                      onClick={() => {
-                        setPromptMenuOpen(false)
-                        sendPrompt(q.prompt)
-                      }}
-                      disabled={!root || !q.prompt.trim()}
-                      title={q.prompt}
-                    >
-                      {q.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })()}
         {/* アクティブな PTY が終了したときだけ再起動ボタンを出す。押すと同じ cwd で起動し直す。 */}
         {root && exited[activeId] && (
           <button

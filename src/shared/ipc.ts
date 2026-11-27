@@ -171,20 +171,9 @@ export const DEFAULT_FONT_SIZES: FontSizes = {
   terminal: 13
 }
 
-// ターミナルのクイック操作（ヘッダのボタン）。押すと prompt を統合ターミナルに送る。
-// id は React の key と保存後の識別に使う安定 ID。
-export interface QuickPrompt {
-  id: string
-  // ボタンに表示するラベル。
-  label: string
-  // ボタンを押したときに統合ターミナルへ送るメッセージ（末尾の改行は送信側で付ける）。
-  prompt: string
-}
-
 // アプリ全体の設定（設定画面で編集する）。項目はここに追加していく。
 // main 側で読み込み時にデフォルト補完するため、項目を増やしても後方互換を保てる。
 export interface AppSettings {
-  quickPrompts: QuickPrompt[]
   // ファイル監視（chokidar）から除外するディレクトリ名。フォルダ名の完全一致で除外する。
   // 目的はファイルディスクリプタ（fd）枯渇の防止。chokidar は macOS で監視対象ファイル 1 つに
   // つき fd を 1 つ使うため、.venv のような大量ファイルを含むフォルダを監視すると fd が枯渇し、
@@ -237,29 +226,8 @@ export const DEFAULT_WATCH_IGNORED_DIRS: string[] = [
   'Pods'
 ]
 
-// クイック操作の初期値。main の正規化と renderer のフォールバックで共有する。
-export const DEFAULT_QUICK_PROMPTS: QuickPrompt[] = [
-  {
-    id: 'commit',
-    label: 'コミット',
-    prompt: '変更内容を確認して、適切な粒度でコミットして'
-  },
-  {
-    id: 'push',
-    label: 'プッシュ',
-    prompt: 'リモート（origin）と同期して。必要なら pull してから push して'
-  },
-  {
-    id: 'commit-push',
-    label: 'コミット&プッシュ',
-    prompt:
-      '変更内容を確認して適切な粒度でコミットし、その後 origin と同期（必要なら pull してから push）して'
-  }
-]
-
 // アプリ設定の初期値。
 export const DEFAULT_APP_SETTINGS: AppSettings = {
-  quickPrompts: DEFAULT_QUICK_PROMPTS,
   watchIgnoredDirs: DEFAULT_WATCH_IGNORED_DIRS,
   paneArrangement: DEFAULT_PANE_ARRANGEMENT,
   fontSizes: DEFAULT_FONT_SIZES

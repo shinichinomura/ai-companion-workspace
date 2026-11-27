@@ -1,21 +1,17 @@
 import { create } from 'zustand'
 import {
-  DEFAULT_QUICK_PROMPTS,
   DEFAULT_WATCH_IGNORED_DIRS,
   DEFAULT_PANE_ARRANGEMENT,
   DEFAULT_FONT_SIZES,
   type AppSettings,
   type FontSizes,
-  type PaneArrangement,
-  type QuickPrompt
+  type PaneArrangement
 } from '../../../shared/ipc'
 
 // アプリ設定（設定画面）の renderer 側ストア。
 // 真値は main の app-settings.json。起動時に load() で読み込み、設定画面の保存で save() する。
-// TerminalPane などはここから quickPrompts を購読し、保存と同時に再描画される。
+// 各コンポーネントはここから設定を購読し、保存と同時に再描画される。
 interface SettingsState {
-  // ターミナルのクイック操作。
-  quickPrompts: QuickPrompt[]
   // ファイル監視から除外するフォルダ名（fd 枯渇対策）。
   watchIgnoredDirs: string[]
   // ペインの配置（ターミナルの前後）。
@@ -32,7 +28,6 @@ interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   // 読み込み前はデフォルトを暫定表示する（load 完了後に main の値で上書きされる）。
-  quickPrompts: DEFAULT_QUICK_PROMPTS,
   watchIgnoredDirs: DEFAULT_WATCH_IGNORED_DIRS,
   paneArrangement: DEFAULT_PANE_ARRANGEMENT,
   fontSizes: DEFAULT_FONT_SIZES,
@@ -41,7 +36,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   load: async () => {
     const settings = await window.api.getAppSettings()
     set({
-      quickPrompts: settings.quickPrompts,
       watchIgnoredDirs: settings.watchIgnoredDirs,
       paneArrangement: settings.paneArrangement,
       fontSizes: settings.fontSizes,
@@ -52,7 +46,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   save: async (settings: AppSettings) => {
     const saved = await window.api.setAppSettings(settings)
     set({
-      quickPrompts: saved.quickPrompts,
       watchIgnoredDirs: saved.watchIgnoredDirs,
       paneArrangement: saved.paneArrangement,
       fontSizes: saved.fontSizes,

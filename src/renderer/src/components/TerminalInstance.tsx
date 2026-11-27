@@ -10,7 +10,7 @@ import { useSettingsStore } from '../store/settings'
 export interface TerminalHandle {
   // 端末本体にフォーカスする。
   focus: () => void
-  // テキストをそのまま PTY に書き込む（定型プロンプト送信などに使う）。
+  // テキストをそのまま PTY に書き込む（@ 参照の挿入などに使う）。
   sendText: (text: string) => void
   // 終了したシェルを同じ cwd で起動し直す。
   restart: () => void

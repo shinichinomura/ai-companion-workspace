@@ -377,18 +377,7 @@ body {
   cursor: default;
 }
 
-/* 定型プロンプトのトリガー。タイトルを左に寄せ、アイコンとトグルを右側にまとめる。
-   メニューを絶対配置で吊るすため relative にする。 */
-.terminal-actions {
-  position: relative;
-  /* 右寄せは左隣の .terminal-insert-file の margin-left:auto に一本化する。
-     ここにも auto を置くと空きを 2 つで山分けして @ が中央にずれるため 0 にする。 */
-  margin-left: 0;
-  margin-right: 6px;
-  display: inline-flex;
-}
-
-/* ヘッダーに置くアイコンボタン。押すと定型プロンプトのメニューを展開する。 */
+/* ヘッダーに置くアイコンボタン。 */
 .terminal-action-trigger {
   display: flex;
   align-items: center;
@@ -415,65 +404,21 @@ body {
 }
 
 /* 「現在開いているファイルを @ で渡す」ボタン。ヘッダー右側の先頭に置き、
-   margin-left:auto でこのボタン以降（定型プロンプト・再起動・トグル）をまとめて右に寄せる。 */
+   margin-left:auto でこのボタン以降（再起動・トグル）をまとめて右に寄せる。 */
 .terminal-insert-file {
   margin-left: auto;
-  /* 稲妻ボタンと隣接させる（間隔を詰める）。 */
-  margin-right: 0;
+  margin-right: 6px;
 }
 
-/* @ グリフ。ボタン枠（22px）・稲妻アイコン（14px）と数値上は揃うが、
-   @ は字面が大きく見えるため、フォントサイズは少し小さめにして視覚的に釣り合わせる。 */
+/* @ グリフ。字面が大きく見えるため、フォントサイズは少し小さめにする。 */
 .terminal-insert-file-glyph {
   font-size: 13px;
   font-weight: 600;
   line-height: 1;
 }
 
-/* 展開されるメニュー本体。トリガーの直下・右寄せに吊るす。 */
-.terminal-action-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 20;
-  min-width: 160px;
-  display: flex;
-  flex-direction: column;
-  padding: 4px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-/* メニュー項目。よく使う Git 操作を Claude に送る。 */
-.terminal-action-menu-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  font-size: 12px;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--fg);
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  padding: 5px 8px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.terminal-action-menu-item:hover:not(:disabled) {
-  background: #333;
-}
-
-.terminal-action-menu-item:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
 /* PTY 終了時だけ出る再起動ボタン。終了に気づけるよう少し目立たせる。
-   .terminal-actions の外側に置くため、トグルとの間に余白を取る。 */
+   トグルとの間に余白を取る。 */
 .terminal-restart-btn {
   margin-right: 6px;
   font-size: 10px;
@@ -1506,98 +1451,7 @@ body {
   color: var(--fg-dim);
 }
 
-/* クイック操作の編集リスト。 */
-.quick-prompt-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.quick-prompt-empty {
-  margin: 0;
-  padding: 12px;
-  font-size: 12px;
-  color: var(--fg-dim);
-  text-align: center;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-}
-
-.quick-prompt-row {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-  padding: 8px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-.quick-prompt-fields {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.quick-prompt-label,
-.quick-prompt-text {
-  width: 100%;
-  font-family: inherit;
-  font-size: 12px;
-  color: var(--fg);
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 5px 8px;
-}
-
-.quick-prompt-text {
-  resize: vertical;
-  line-height: 1.4;
-}
-
-.quick-prompt-label:focus,
-.quick-prompt-text:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-/* 行ごとの並べ替え・削除ボタン。 */
-.quick-prompt-actions {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.quick-prompt-actions button {
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  font-size: 12px;
-  color: var(--fg-dim);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.quick-prompt-actions button:hover:not(:disabled) {
-  color: var(--fg);
-  background: #333;
-}
-
-.quick-prompt-actions button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-/* リスト下の「追加」「デフォルトに戻す」。 */
+/* 設定セクション下の「デフォルトに戻す」ボタン列。 */
 .quick-prompt-toolbar {
   display: flex;
   gap: 8px;
@@ -2323,7 +2177,7 @@ body {
   color: var(--fg-dim);
 }
 
-/* 設定画面の入力欄（.quick-prompt-label）と同じ見た目に揃えたドロップダウン。 */
+/* 設定画面の入力欄と同じ見た目に揃えたドロップダウン。 */
 .pane-arrangement-options select {
   font-family: inherit;
   font-size: 12px;
