@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { SearchFileResult, SearchMatch } from '../../../shared/ipc'
+import { DEFAULT_FONT_SIZES, type SearchFileResult, type SearchMatch } from '../../../shared/ipc'
 import { useSearchStore } from '../store/search'
 import { useWorkspaceStore } from '../store/workspace'
+import { useSettingsStore } from '../store/settings'
 
 // relPath の末尾セグメント（表示名）。
 function baseName(relPath: string): string {
@@ -111,6 +112,8 @@ function SearchPane(): JSX.Element {
   const status = useSearchStore((s) => s.status)
   const message = useSearchStore((s) => s.message)
   const results = useSearchStore((s) => s.results)
+  // ファイルツリーと同じフォントサイズ（設定画面の「ファイルツリー・検索」）。
+  const explorerFontSize = useSettingsStore((s) => s.fontSizes.explorer)
   const focusNonce = useSearchStore((s) => s.focusNonce)
   const setQuery = useSearchStore((s) => s.setQuery)
   const scheduleSearch = useSearchStore((s) => s.scheduleSearch)
@@ -195,7 +198,10 @@ function SearchPane(): JSX.Element {
         </div>
         {summary && <div className="search-summary">{summary}</div>}
       </div>
-      <div className="pane-body search-results">
+      <div
+        className="pane-body search-results"
+        style={{ zoom: explorerFontSize / DEFAULT_FONT_SIZES.explorer }}
+      >
         {results?.files.map((file) => <FileGroup key={file.relPath} file={file} />)}
       </div>
     </div>

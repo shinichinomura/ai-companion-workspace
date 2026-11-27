@@ -6,7 +6,11 @@ import {
   DEFAULT_QUICK_PROMPTS,
   DEFAULT_WATCH_IGNORED_DIRS,
   DEFAULT_PANE_ARRANGEMENT,
+  DEFAULT_FONT_SIZES,
+  FONT_SIZE_MIN,
+  FONT_SIZE_MAX,
   type AppSettings,
+  type FontSizes,
   type PaneArrangement,
   type QuickPrompt
 } from '../shared/ipc'
@@ -38,7 +42,24 @@ function normalize(parsed: unknown): AppSettings {
   return {
     quickPrompts: normalizeQuickPrompts(obj.quickPrompts),
     watchIgnoredDirs: normalizeWatchIgnoredDirs(obj.watchIgnoredDirs),
-    paneArrangement: normalizePaneArrangement(obj.paneArrangement)
+    paneArrangement: normalizePaneArrangement(obj.paneArrangement),
+    fontSizes: normalizeFontSizes(obj.fontSizes)
+  }
+}
+
+// フォントサイズを正規化する。数値でない・欠損はデフォルトに倒し、許容範囲に丸める（整数化）。
+function normalizeFontSizes(value: unknown): FontSizes {
+  const obj = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const pick = (key: keyof FontSizes): number => {
+    const v = obj[key]
+    if (typeof v !== 'number' || !Number.isFinite(v)) return DEFAULT_FONT_SIZES[key]
+    return Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, Math.round(v)))
+  }
+  return {
+    explorer: pick('explorer'),
+    editor: pick('editor'),
+    preview: pick('preview'),
+    terminal: pick('terminal')
   }
 }
 

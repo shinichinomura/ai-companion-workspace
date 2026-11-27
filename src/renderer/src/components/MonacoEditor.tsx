@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { monaco, languageFromPath } from './monacoSetup'
 import { scrollKey, saveScrollTop, loadScrollTop } from './scrollMemory'
+import { useSettingsStore } from '../store/settings'
 
 interface MonacoEditorProps {
   // 編集対象を一意に識別する相対パス。変わったらモデルを切り替える。
@@ -37,6 +38,10 @@ function MonacoEditor({
   onEditorReady
 }: MonacoEditorProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
+  // 設定画面で指定したエディタのフォントサイズ（px）。
+  const fontSize = useSettingsStore((s) => s.fontSizes.editor)
+  const fontSizeRef = useRef(fontSize)
+  fontSizeRef.current = fontSize
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   // 最新のコールバックを参照するための ref（エディタ再生成を避ける）。
   const onChangeRef = useRef(onChange)
@@ -61,7 +66,7 @@ function MonacoEditor({
       scrollBeyondLastLine: false,
       // ペインの右端で折り返す（横スクロールを出さない）。
       wordWrap: 'on',
-      fontSize: 13,
+      fontSize: fontSizeRef.current,
       tabSize: 2
     })
     editorRef.current = editor
@@ -85,6 +90,11 @@ function MonacoEditor({
     // 生成は 1 度きり。value/path の反映は別の effect で行う。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // フォントサイズの設定変更を、生成済みのエディタへ反映する。
+  useEffect(() => {
+    editorRef.current?.updateOptions({ fontSize })
+  }, [fontSize])
 
   // path が変わったら（マウント直後を含む）、旧ファイルのスクロール位置を記憶したうえで
   // 言語・内容を新ファイルに切り替え、新ファイルの記憶位置（なければ先頭）へ復元する。

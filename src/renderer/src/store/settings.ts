@@ -3,7 +3,9 @@ import {
   DEFAULT_QUICK_PROMPTS,
   DEFAULT_WATCH_IGNORED_DIRS,
   DEFAULT_PANE_ARRANGEMENT,
+  DEFAULT_FONT_SIZES,
   type AppSettings,
+  type FontSizes,
   type PaneArrangement,
   type QuickPrompt
 } from '../../../shared/ipc'
@@ -18,6 +20,8 @@ interface SettingsState {
   watchIgnoredDirs: string[]
   // ペインの配置（ターミナルの前後）。
   paneArrangement: PaneArrangement
+  // ペインごとのフォントサイズ（px）。
+  fontSizes: FontSizes
   // main からの読み込みが完了したか。
   loaded: boolean
   // main から設定を読み込んでストアに反映する。起動時に 1 度呼ぶ。
@@ -31,6 +35,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   quickPrompts: DEFAULT_QUICK_PROMPTS,
   watchIgnoredDirs: DEFAULT_WATCH_IGNORED_DIRS,
   paneArrangement: DEFAULT_PANE_ARRANGEMENT,
+  fontSizes: DEFAULT_FONT_SIZES,
   loaded: false,
 
   load: async () => {
@@ -39,6 +44,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       quickPrompts: settings.quickPrompts,
       watchIgnoredDirs: settings.watchIgnoredDirs,
       paneArrangement: settings.paneArrangement,
+      fontSizes: settings.fontSizes,
       loaded: true
     })
   },
@@ -49,6 +55,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       quickPrompts: saved.quickPrompts,
       watchIgnoredDirs: saved.watchIgnoredDirs,
       paneArrangement: saved.paneArrangement,
+      fontSizes: saved.fontSizes,
       loaded: true
     })
   }

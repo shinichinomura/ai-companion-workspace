@@ -3,10 +3,27 @@ import {
   DEFAULT_QUICK_PROMPTS,
   DEFAULT_WATCH_IGNORED_DIRS,
   DEFAULT_PANE_ARRANGEMENT,
+  DEFAULT_FONT_SIZES,
+  FONT_SIZE_MIN,
+  FONT_SIZE_MAX,
+  type FontSizes,
   type PaneArrangement,
   type QuickPrompt
 } from '../../../shared/ipc'
 import { useSettingsStore } from '../store/settings'
+
+// フォントサイズ設定の行定義（表示順）。
+const FONT_SIZE_ROWS: { key: keyof FontSizes; label: string }[] = [
+  { key: 'explorer', label: 'ファイルツリー・検索' },
+  { key: 'editor', label: 'エディタ' },
+  { key: 'preview', label: 'プレビュー（Markdown / CSV）' },
+  { key: 'terminal', label: 'ターミナル' }
+]
+
+// フォントサイズを許容範囲の整数に丸める。
+function clampFontSize(v: number): number {
+  return Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, Math.round(v)))
+}
 
 // テキストエリアの各行を、監視除外フォルダ名の配列に整える。
 // 空行・前後空白を落とし、パス区切りを含む不正な行は除外し、重複も除く（順序は保つ）。
@@ -40,6 +57,7 @@ function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | nul
   const quickPrompts = useSettingsStore((s) => s.quickPrompts)
   const watchIgnoredDirs = useSettingsStore((s) => s.watchIgnoredDirs)
   const paneArrangement = useSettingsStore((s) => s.paneArrangement)
+  const fontSizes = useSettingsStore((s) => s.fontSizes)
   const save = useSettingsStore((s) => s.save)
 
   // 編集用のローカル状態。モーダルを開くたびにストアの現在値で初期化する（キャンセルで破棄できる）。
@@ -49,13 +67,17 @@ function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | nul
   // ペイン配置（ファイルツリーの左右・ターミナルの前後）。
   const [arrangement, setArrangement] = useState<PaneArrangement>(DEFAULT_PANE_ARRANGEMENT)
 
+  // ペインごとのフォントサイズ。
+  const [sizes, setSizes] = useState<FontSizes>(DEFAULT_FONT_SIZES)
+
   useEffect(() => {
     if (open) {
       setPrompts(quickPrompts.map((q) => ({ ...q })))
       setWatchDirsText(watchIgnoredDirs.join('\n'))
       setArrangement({ ...paneArrangement })
+      setSizes({ ...fontSizes })
     }
-  }, [open, quickPrompts, watchIgnoredDirs, paneArrangement])
+  }, [open, quickPrompts, watchIgnoredDirs, paneArrangement, fontSizes])
 
   // Esc で閉じる。
   useEffect(() => {
@@ -97,7 +119,8 @@ function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | nul
     await save({
       quickPrompts: cleaned,
       watchIgnoredDirs: parseWatchDirs(watchDirsText),
-      paneArrangement: arrangement
+      paneArrangement: arrangement,
+      fontSizes: sizes
     })
     onClose()
   }
@@ -156,6 +179,40 @@ function SettingsModal({ open, onClose }: SettingsModalProps): JSX.Element | nul
                 </select>
               </label>
               <button type="button" onClick={() => setArrangement({ ...DEFAULT_PANE_ARRANGEMENT })}>
+                デフォルトに戻す
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <h3 className="settings-section-title">フォントサイズ</h3>
+            <p className="settings-section-desc">
+              ペインごとに文字の大きさ（px）を指定します（{FONT_SIZE_MIN}〜{FONT_SIZE_MAX}）。
+              保存すると操作中のタブにすぐ反映されます（他のタブはアプリの再起動後に反映）。
+            </p>
+            <div className="font-size-list">
+              {FONT_SIZE_ROWS.map(({ key, label }) => (
+                <label key={key} className="font-size-row">
+                  <span className="font-size-label">{label}</span>
+                  <input
+                    type="number"
+                    className="font-size-input"
+                    min={FONT_SIZE_MIN}
+                    max={FONT_SIZE_MAX}
+                    step={1}
+                    value={sizes[key]}
+                    onChange={(e) => {
+                      const v = e.target.valueAsNumber
+                      if (Number.isFinite(v)) setSizes((s) => ({ ...s, [key]: v }))
+                    }}
+                    onBlur={() => setSizes((s) => ({ ...s, [key]: clampFontSize(s[key]) }))}
+                  />
+                  <span className="font-size-unit">px</span>
+                </label>
+              ))}
+            </div>
+            <div className="quick-prompt-toolbar">
+              <button type="button" onClick={() => setSizes({ ...DEFAULT_FONT_SIZES })}>
                 デフォルトに戻す
               </button>
             </div>

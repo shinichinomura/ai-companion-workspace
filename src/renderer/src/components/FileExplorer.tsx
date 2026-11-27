@@ -8,8 +8,9 @@ import {
   useRef,
   useState
 } from 'react'
-import type { FileNode, GitFileStatus } from '../../../shared/ipc'
+import { DEFAULT_FONT_SIZES, type FileNode, type GitFileStatus } from '../../../shared/ipc'
 import { useWorkspaceStore, selectActiveFile } from '../store/workspace'
+import { useSettingsStore } from '../store/settings'
 import { useTerminalBridge } from '../store/terminalBridge'
 
 // 右クリックで開いたコンテキストメニューの状態。
@@ -668,6 +669,9 @@ function FileExplorer(): JSX.Element {
   // 変更を含むフォルダ集合は statuses が変わったときだけ作り直す。
   const changedDirs = useMemo(() => computeChangedDirs(gitStatuses), [gitStatuses])
 
+  // 設定画面で指定したファイルツリーのフォントサイズ（px）。
+  const explorerFontSize = useSettingsStore((s) => s.fontSizes.explorer)
+
   // 「変更ファイルのみ表示」モード用のフラットなリスト。
   const changedEntries = useMemo(() => buildChangedEntries(gitStatuses), [gitStatuses])
 
@@ -722,7 +726,8 @@ function FileExplorer(): JSX.Element {
             設定の「監視から除外するフォルダ」に生成物フォルダを追加すると再開できます。
           </div>
         )}
-        <div className="pane-body tree">
+        {/* フォントサイズは zoom で拡縮する（行の高さ・アイコン・余白もまとめて比例する）。 */}
+        <div className="pane-body tree" style={{ zoom: explorerFontSize / DEFAULT_FONT_SIZES.explorer }}>
           {rootNodes == null ? (
             <RecentFolders />
           ) : showOnlyChanged ? (

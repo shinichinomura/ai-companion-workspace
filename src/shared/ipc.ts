@@ -147,6 +147,30 @@ export const DEFAULT_PANE_ARRANGEMENT: PaneArrangement = {
   terminalFirst: false
 }
 
+// ペインごとのフォントサイズ（px）。設定画面で変更する。
+//   explorer … ファイルツリー・検索ペイン
+//   editor   … テキストエディタ（Monaco）
+//   preview  … Markdown / CSV のプレビュー
+//   terminal … 統合ターミナル
+export interface FontSizes {
+  explorer: number
+  editor: number
+  preview: number
+  terminal: number
+}
+
+// フォントサイズの許容範囲（px）。main の正規化と設定画面の入力で共有する。
+export const FONT_SIZE_MIN = 8
+export const FONT_SIZE_MAX = 32
+
+// フォントサイズの初期値（従来の見た目と同じ）。
+export const DEFAULT_FONT_SIZES: FontSizes = {
+  explorer: 13,
+  editor: 13,
+  preview: 13,
+  terminal: 13
+}
+
 // ターミナルのクイック操作（ヘッダのボタン）。押すと prompt を統合ターミナルに送る。
 // id は React の key と保存後の識別に使う安定 ID。
 export interface QuickPrompt {
@@ -168,6 +192,8 @@ export interface AppSettings {
   watchIgnoredDirs: string[]
   // ペインの配置（ターミナルの前後）。
   paneArrangement: PaneArrangement
+  // ペインごとのフォントサイズ。
+  fontSizes: FontSizes
 }
 
 // 監視から除外するフォルダ名の初期値。fd 枯渇を避けるため、生成物・キャッシュ・仮想環境など
@@ -235,7 +261,8 @@ export const DEFAULT_QUICK_PROMPTS: QuickPrompt[] = [
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   quickPrompts: DEFAULT_QUICK_PROMPTS,
   watchIgnoredDirs: DEFAULT_WATCH_IGNORED_DIRS,
-  paneArrangement: DEFAULT_PANE_ARRANGEMENT
+  paneArrangement: DEFAULT_PANE_ARRANGEMENT,
+  fontSizes: DEFAULT_FONT_SIZES
 }
 
 // ファイルツリーの 1 ノード。ディレクトリは遅延展開するため children は持たない。

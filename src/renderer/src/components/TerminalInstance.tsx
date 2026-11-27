@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { useSettingsStore } from '../store/settings'
 
 // 1 つのターミナル（xterm + PTY）を司るインスタンス。タブで複数並ぶため、
 // 親（TerminalPane）が id ごとにマウントし、非アクティブなものは display:none で隠す
@@ -41,6 +42,10 @@ function TerminalInstance({
   onExitedChange
 }: TerminalInstanceProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
+  // 設定画面で指定したターミナルのフォントサイズ（px）。
+  const fontSize = useSettingsStore((s) => s.fontSizes.terminal)
+  const fontSizeRef = useRef(fontSize)
+  fontSizeRef.current = fontSize
   // 折りたたみ/タブ切替からの復帰時にサイズを測り直すため保持する。
   const fitRef = useRef<FitAddon | null>(null)
   const termRef = useRef<Terminal | null>(null)
@@ -64,7 +69,7 @@ function TerminalInstance({
     const term = new Terminal({
       cursorBlink: true,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
+      fontSize: fontSizeRef.current,
       // ペインの配色に合わせた最低限のテーマ。背景は CSS の --bg-pane(#252526) と揃える。
       theme: { background: '#252526', foreground: '#d4d4d4' }
     })
@@ -161,6 +166,21 @@ function TerminalInstance({
       setHandleRef.current(id, null)
     }
   }, [id])
+
+  // フォントサイズの設定変更を反映する。セルの大きさが変わるため、測り直して PTY にも伝える。
+  // 非表示中（別タブ／折りたたみ）は 0 サイズで測れないので、表示復帰時の再計測に任せる。
+  useEffect(() => {
+    const term = termRef.current
+    if (!term || term.options.fontSize === fontSize) return
+    term.options.fontSize = fontSize
+    if (!active || collapsed) return
+    try {
+      fitRef.current?.fit()
+      window.api.terminalResize({ id, cols: term.cols, rows: term.rows })
+    } catch {
+      // サイズが取れないタイミングは無視する。
+    }
+  }, [fontSize, active, collapsed, id])
 
   // 非表示（別タブ／折りたたみ）から表示に戻ったらサイズを測り直してフォーカスする。
   // 非表示中は 0 サイズなので fit がずれるため、表示確定後の rAF で測る。

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useWorkspaceStore } from '../store/workspace'
+import { useSettingsStore } from '../store/settings'
 import { renderMarkdown, resolveLinkPath } from './markdown'
 
 // Markdown のレンダリング済みプレビュー。
@@ -15,6 +16,8 @@ function MarkdownPreview({
 }): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const openFileByRelPath = useWorkspaceStore((s) => s.openFileByRelPath)
+  // 設定画面で指定したプレビューのフォントサイズ（px）。見出し等は em なので連動して拡縮する。
+  const fontSize = useSettingsStore((s) => s.fontSizes.preview)
 
   // 変換コストを抑えるため content / 表示中ファイルが変わったときだけ再変換する。
   // activeRelPath は相対パス画像の解決起点に使う（markdown 側で URL 化する）。
@@ -73,6 +76,7 @@ function MarkdownPreview({
     <div
       ref={containerRef}
       className="markdown-preview"
+      style={{ fontSize }}
       onClick={handleClick}
       dangerouslySetInnerHTML={{ __html: html }}
     />
