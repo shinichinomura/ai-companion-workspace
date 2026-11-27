@@ -250,6 +250,33 @@ body {
   user-select: none;
 }
 
+/* ドラッグ並べ替え中: 動かしているタブは薄くし、挿入位置にアクセント色の線を出す。 */
+.terminal-tab {
+  position: relative;
+}
+
+.terminal-tab.dragging {
+  opacity: 0.4;
+}
+
+.terminal-tab.drop-before::before,
+.terminal-tab.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
+
+.terminal-tab.drop-before::before {
+  left: -2px;
+}
+
+.terminal-tab.drop-after::after {
+  right: -2px;
+}
+
 .terminal-tab:hover {
   background: #2d2d2d;
   color: var(--fg);

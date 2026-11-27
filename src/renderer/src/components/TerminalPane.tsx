@@ -169,6 +169,31 @@ function TerminalPane({
     setRenaming(null)
   }
 
+  // ドラッグ並べ替え中のタブ id と、挿入位置（タブ間の隙間の番号 0..tabs.length）。
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [gap, setGap] = useState<number | null>(null)
+  const endDrag = (): void => {
+    setDragId(null)
+    setGap(null)
+  }
+  // 隙間番号を「ドラッグ元を取り除いた後の位置」に直してタブを並べ替える。
+  // 並び順だけ変えるので id は不変で、各ターミナル（PTY）には影響しない。
+  const dropAt = (g: number): void => {
+    const from = tabs.findIndex((t) => t.id === dragId)
+    if (from !== -1) {
+      const to = g > from ? g - 1 : g
+      if (to !== from) {
+        setTabs((ts) => {
+          const next = [...ts]
+          const [moved] = next.splice(from, 1)
+          next.splice(to, 0, moved)
+          return next
+        })
+      }
+    }
+    endDrag()
+  }
+
   // 新しいターミナルを追加してアクティブにする。
   const addTerminal = (): void => {
     const t = makeTab()
@@ -286,12 +311,42 @@ function TerminalPane({
       <div className="terminal-header">
         {/* ターミナルのタブ。各タブはクリックで切替、× で閉じる。+ で新規追加。 */}
         <div className="terminal-tabs" role="tablist">
-          {tabs.map((t) => (
+          {tabs.map((t, i) => (
             <div
               key={t.id}
-              className={`terminal-tab${t.id === activeId ? ' active' : ''}`}
+              className={[
+                'terminal-tab',
+                t.id === activeId ? 'active' : '',
+                t.id === dragId ? 'dragging' : '',
+                dragId !== null && gap === i ? 'drop-before' : '',
+                dragId !== null && gap === i + 1 && i === tabs.length - 1 ? 'drop-after' : ''
+              ]
+                .filter(Boolean)
+                .join(' ')}
               role="tab"
               aria-selected={t.id === activeId}
+              // 名前編集中は入力欄の文字選択を妨げないよう、ドラッグを無効にする。
+              draggable={renaming?.id !== t.id}
+              onDragStart={(e) => {
+                setDragId(t.id)
+                e.dataTransfer.effectAllowed = 'move'
+                e.dataTransfer.setData('text/plain', termLabel(t))
+              }}
+              onDragOver={(e) => {
+                if (dragId === null) return
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                // カーソルがタブの左半分なら手前、右半分なら後ろに挿入する。
+                const rect = e.currentTarget.getBoundingClientRect()
+                const g = e.clientX < rect.left + rect.width / 2 ? i : i + 1
+                if (g !== gap) setGap(g)
+              }}
+              onDrop={(e) => {
+                if (dragId === null || gap === null) return
+                e.preventDefault()
+                dropAt(gap)
+              }}
+              onDragEnd={endDrag}
               onClick={() => setActiveId(t.id)}
               onDoubleClick={() => {
                 // 編集中のタブをさらにダブルクリックしても入力をリセットしない。
@@ -479,17 +534,21 @@ function TerminalPane({
       <div className="terminal-content" style={{ display: collapsed ? 'none' : undefined }}>
         {root ? (
           // すべてのターミナルをマウントし続け、アクティブなものだけ表示する（PTY を保持）。
-          tabs.map((t) => (
-            <TerminalInstance
-              key={t.id}
-              id={t.id}
-              label={termLabel(t)}
-              active={t.id === activeId}
-              collapsed={collapsed}
-              setHandle={setHandle}
-              onExitedChange={handleExitedChange}
-            />
-          ))
+          // DOM の並びはタブの並べ替えに連動させず、作成順（num 昇順）で固定する
+          // （xterm の DOM を移動させてスクロール位置などが失われるのを避ける）。
+          [...tabs]
+            .sort((a, b) => a.num - b.num)
+            .map((t) => (
+              <TerminalInstance
+                key={t.id}
+                id={t.id}
+                label={termLabel(t)}
+                active={t.id === activeId}
+                collapsed={collapsed}
+                setHandle={setHandle}
+                onExitedChange={handleExitedChange}
+              />
+            ))
         ) : (
           <div className="pane-body placeholder">フォルダを開くとターミナルが起動します</div>
         )}
